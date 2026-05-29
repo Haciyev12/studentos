@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { AlertCircle, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const schema = z.object({
@@ -18,7 +18,17 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackError = searchParams.get('error')
   const [loading, setLoading] = useState(false)
 
   const {
@@ -37,7 +47,13 @@ export default function LoginPage() {
     setLoading(false)
 
     if (error) {
-      toast.error(error.message)
+      if (error.message.toLowerCase().includes('email not confirmed')) {
+        toast.error('Please confirm your email first — check your inbox for the link we sent.')
+      } else if (error.message.toLowerCase().includes('invalid login credentials')) {
+        toast.error('Wrong email or password.')
+      } else {
+        toast.error(error.message)
+      }
       return
     }
 
@@ -51,6 +67,13 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold tracking-tight mb-1">Welcome back</h1>
         <p className="text-sm text-zinc-500">Sign in to your Scholar account</p>
       </div>
+
+      {callbackError === 'confirmation_failed' && (
+        <div className="mb-4 flex items-start gap-2.5 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>The confirmation link expired or was already used. Try signing in or register again.</span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>

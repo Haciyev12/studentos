@@ -1,13 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2, Mail } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const schema = z.object({
@@ -19,8 +18,9 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function RegisterPage() {
-  const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
+  const [sentTo, setSentTo] = useState('')
 
   const {
     register,
@@ -36,6 +36,7 @@ export default function RegisterPage() {
       password: data.password,
       options: {
         data: { full_name: data.fullName },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
     setLoading(false)
@@ -45,9 +46,38 @@ export default function RegisterPage() {
       return
     }
 
-    toast.success('Account created! Redirecting...')
-    router.push('/dashboard')
-    router.refresh()
+    setSentTo(data.email)
+    setEmailSent(true)
+  }
+
+  if (emailSent) {
+    return (
+      <div className="w-full max-w-sm text-center animate-slide-up">
+        <div className="w-14 h-14 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5">
+          <Mail className="w-7 h-7 text-indigo-400" />
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight mb-2">Check your email</h1>
+        <p className="text-sm text-zinc-400 mb-1">
+          We sent a confirmation link to
+        </p>
+        <p className="text-sm font-medium text-zinc-200 mb-6">{sentTo}</p>
+        <p className="text-xs text-zinc-500 mb-6">
+          Click the link in the email to activate your account, then come back to sign in.
+        </p>
+        <div className="flex flex-col gap-2">
+          <Link
+            href="/login"
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            Go to sign in
+          </Link>
+          <p className="text-xs text-zinc-600 mt-2">
+            Didn&apos;t receive it? Check your spam folder.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

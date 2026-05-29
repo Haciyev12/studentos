@@ -34,7 +34,7 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
   const isAuthPage = pathname === '/login' || pathname === '/register'
-  const isPublicPage = pathname === '/'
+  const isPublicPage = pathname === '/' || pathname.startsWith('/auth/')
 
   if (!user && !isPublicPage && !isAuthPage) {
     return NextResponse.redirect(new URL('/login', request.url))
