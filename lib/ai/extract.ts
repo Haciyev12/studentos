@@ -1,27 +1,41 @@
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import type { ExtractedDeadline, DeadlineType } from '@/types'
-
-const client = new Anthropic()
 
 const VALID_TYPES: DeadlineType[] = ['assignment', 'quiz', 'exam', 'project', 'other']
 
+// Change this env var to switch models — any free model on openrouter.ai works.
+// Default: google/gemma-3-27b-it:free  (fast, free, good at structured output)
+const MODEL = process.env.OPENROUTER_MODEL ?? 'google/gemma-3-27b-it:free'
+
+function getClient() {
+  return new OpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY?.trim(),
+    baseURL: 'https://openrouter.ai/api/v1',
+    defaultHeaders: {
+      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+      'X-Title': 'Scholar',
+    },
+  })
+}
+
 export async function extractDeadlinesFromText(syllabusText: string): Promise<ExtractedDeadline[]> {
+  const client = getClient()
   const truncated = syllabusText.slice(0, 50_000)
   const currentYear = new Date().getFullYear()
 
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  const completion = await client.chat.completions.create({
+    model: MODEL,
     max_tokens: 4096,
     messages: [
       {
         role: 'user',
         content: `You are an academic deadline extractor. Extract every graded deadline from this university course syllabus: assignments, quizzes, exams, projects, and labs.
 
-Return ONLY a valid JSON array — no markdown, no explanation, just raw JSON. Each item must have:
+Return ONLY a valid JSON array — no markdown fences, no explanation, just raw JSON. Each item must have:
 - "title": string (concise name, e.g. "Midterm Exam", "HW 3: Arrays")
 - "type": one of "assignment" | "quiz" | "exam" | "project" | "other"
-- "due_date": string in YYYY-MM-DD format. If no year is given, use ${currentYear}. If only a month/week is given, estimate the date.
-- "description": string | null (optional extra context)
+- "due_date": string in YYYY-MM-DD format. If no year is given, use ${currentYear}. Estimate if only a week/month is mentioned.
+- "description": string | null
 - "weight": number | null (percentage of final grade, e.g. 15 for 15%)
 
 If the syllabus has no deadlines, return [].
@@ -32,7 +46,7 @@ ${truncated}`,
     ],
   })
 
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
+  const text = completion.choices[0]?.message?.content ?? ''
 
   const jsonMatch = text.match(/\[[\s\S]*\]/)
   if (!jsonMatch) return []
