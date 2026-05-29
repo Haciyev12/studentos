@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -18,6 +19,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function RegisterPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [sentTo, setSentTo] = useState('')
@@ -31,7 +33,7 @@ export default function RegisterPage() {
   async function onSubmit(data: FormData) {
     setLoading(true)
     const supabase = createClient()
-    const { error } = await supabase.auth.signUp({
+    const { data: authData, error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
@@ -43,6 +45,15 @@ export default function RegisterPage() {
 
     if (error) {
       toast.error(error.message)
+      return
+    }
+
+    // If Supabase auto-confirmed the user (email confirmation disabled),
+    // a session is returned immediately — go straight to dashboard.
+    if (authData.session) {
+      toast.success('Account created!')
+      router.push('/dashboard')
+      router.refresh()
       return
     }
 

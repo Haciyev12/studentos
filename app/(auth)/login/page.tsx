@@ -57,8 +57,8 @@ function LoginForm() {
       return
     }
 
-    router.push('/dashboard')
-    router.refresh()
+    toast.success('Signed in!')
+    window.location.href = '/dashboard'
   }
 
   return (
