@@ -3,12 +3,13 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { extractDeadlinesFromText } from '@/lib/ai/extract'
 
-// pdf-parse has a quirk: importing the default export triggers a test file read.
-// Importing the internal module directly avoids this.
+// pdf-parse must run in Node.js runtime (not Edge).
+// Importing the internal module avoids a test-file-read bug in the default export.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse/lib/pdf-parse.js')
 
-export const maxDuration = 60 // seconds
+export const runtime = 'nodejs'
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   const cookieStore = cookies()
