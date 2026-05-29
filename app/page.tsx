@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, BookOpen, Calendar, Sparkles, Upload, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, BookOpen, Calendar, CheckCircle2, Sparkles, Upload } from 'lucide-react'
 
 export default function LandingPage() {
   return (
@@ -7,11 +7,13 @@ export default function LandingPage() {
       {/* Nav */}
       <nav className="border-b border-zinc-900 px-6 py-4 sticky top-0 z-50 bg-zinc-950/80 backdrop-blur-md">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
               <BookOpen className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-sm tracking-tight">Scholar</span>
+            <div>
+              <span className="font-bold text-sm tracking-tight">ADA Scholar</span>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -34,18 +36,18 @@ export default function LandingPage() {
       <section className="max-w-5xl mx-auto px-6 pt-28 pb-20 text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-xs text-indigo-400 mb-8 font-medium">
           <Sparkles className="w-3 h-3" />
-          Powered by Claude AI
+          Built for ADA University students
         </div>
         <h1 className="text-5xl md:text-[4.5rem] font-bold tracking-tight leading-[1.08] mb-6">
-          <span className="text-zinc-100">Your academic life,</span>
+          <span className="text-zinc-100">Never miss a deadline</span>
           <br />
           <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-purple-400 bg-clip-text text-transparent">
-            organized by AI
+            at ADA University
           </span>
         </h1>
         <p className="text-lg text-zinc-400 max-w-xl mx-auto mb-10 leading-relaxed">
-          Upload your syllabus PDFs. AI extracts every deadline, exam, and assignment automatically.
-          Never miss a due date again.
+          Upload your course syllabus PDFs. AI reads them and automatically builds your semester
+          calendar — every quiz, assignment, and exam in one place.
         </p>
         <div className="flex items-center justify-center gap-3">
           <Link
@@ -61,6 +63,9 @@ export default function LandingPage() {
             Sign in
           </Link>
         </div>
+        <p className="mt-4 text-xs text-zinc-600">
+          Free for all ADA University students
+        </p>
       </section>
 
       {/* How it works */}
@@ -75,26 +80,26 @@ export default function LandingPage() {
               step: '01',
               title: 'Upload your syllabus',
               description:
-                'Drag and drop any syllabus PDF. Works with any university format or template.',
+                'Drop any syllabus PDF from your ADA courses. Works with every department and format.',
             },
             {
               icon: Sparkles,
               step: '02',
-              title: 'AI reads everything',
+              title: 'AI extracts everything',
               description:
-                'Claude AI parses your syllabus and extracts every deadline, quiz, exam, and grading weight.',
+                'AI reads your syllabus and pulls out every deadline, quiz, midterm, final, and grading weight automatically.',
             },
             {
               icon: Calendar,
               step: '03',
-              title: 'Your calendar, populated',
+              title: 'Your semester, organised',
               description:
-                'All deadlines appear in your dashboard calendar instantly. Edit anything you want.',
+                'All deadlines appear on a colour-coded calendar. Edit anything, add manually, mark as done.',
             },
           ].map(({ icon: Icon, step, title, description }) => (
             <div
               key={step}
-              className="group p-6 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors"
+              className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center">
@@ -109,19 +114,20 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features list */}
+      {/* Feature list */}
       <section className="max-w-5xl mx-auto px-6 py-16">
         <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-8 md:p-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-4">
+          <h2 className="text-lg font-bold mb-6 tracking-tight">Everything you need for a stress-free semester</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-3">
             {[
-              'Automatic deadline extraction from any PDF',
-              'Smart calendar with color-coded courses',
-              'Manual deadline editing after extraction',
-              'GPA and grade weight tracking',
-              'Upcoming assignments dashboard',
-              'Dark mode — easy on your eyes',
+              'Auto-extract deadlines from any syllabus PDF',
+              'Colour-coded calendar by course',
+              'Edit or add deadlines manually',
+              'Track assignment weights and GPA impact',
+              'Dashboard with upcoming deadlines',
+              'Works on all ADA University course formats',
             ].map((feature) => (
-              <div key={feature} className="flex items-center gap-3 py-2">
+              <div key={feature} className="flex items-center gap-3 py-1.5">
                 <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
                 <span className="text-sm text-zinc-300">{feature}</span>
               </div>
@@ -132,9 +138,9 @@ export default function LandingPage() {
 
       {/* CTA */}
       <section className="max-w-5xl mx-auto px-6 py-20 text-center">
-        <h2 className="text-3xl font-bold mb-4 tracking-tight">Ready to get organised?</h2>
+        <h2 className="text-3xl font-bold mb-3 tracking-tight">Ready for a better semester?</h2>
         <p className="text-zinc-400 mb-8 text-sm">
-          Free to get started. No credit card required.
+          Free for ADA University students. Takes 2 minutes to set up.
         </p>
         <Link
           href="/register"
@@ -146,7 +152,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-zinc-900 py-8 text-center text-xs text-zinc-600">
-        Scholar &mdash; Built for students
+        ADA Scholar &mdash; Made for ADA University students
       </footer>
     </main>
   )

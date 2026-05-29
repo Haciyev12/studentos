@@ -6,8 +6,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
-  title: 'Scholar — AI Academic Planner',
-  description: 'Upload your syllabus and let AI extract all your deadlines automatically.',
+  title: 'ADA Scholar — AI Academic Planner',
+  description: 'ADA University student planner. Upload your syllabus and let AI extract all your deadlines automatically.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

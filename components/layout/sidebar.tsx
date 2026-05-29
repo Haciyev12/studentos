@@ -19,8 +19,7 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
 
   async function handleSignOut() {
     await supabase.auth.signOut()
-    router.push('/')
-    router.refresh()
+    window.location.href = '/'
   }
 
   return (
@@ -31,7 +30,7 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
           <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
             <BookOpen className="w-3.5 h-3.5 text-white" />
           </div>
-          <span className="font-semibold text-sm tracking-tight">Scholar</span>
+          <span className="font-semibold text-sm tracking-tight">ADA Scholar</span>
         </Link>
       </div>
 
