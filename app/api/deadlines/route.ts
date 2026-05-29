@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const courseId = searchParams.get('course_id')
+  const from = searchParams.get('from')
+  const to = searchParams.get('to')
 
   let query = supabase
     .from('deadlines')
@@ -43,6 +45,8 @@ export async function GET(request: NextRequest) {
     .order('due_date', { ascending: true })
 
   if (courseId) query = query.eq('course_id', courseId)
+  if (from) query = query.gte('due_date', from)
+  if (to) query = query.lte('due_date', to)
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

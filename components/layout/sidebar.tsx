@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, Calendar, GraduationCap, LayoutDashboard, LogOut } from 'lucide-react'
+import { BookOpen, Brain, Calendar, GraduationCap, LayoutDashboard, LogOut, TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
@@ -10,6 +10,8 @@ const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/courses', label: 'Courses', icon: GraduationCap },
   { href: '/calendar', label: 'Calendar', icon: Calendar },
+  { href: '/gpa', label: 'GPA Tracker', icon: TrendingUp },
+  { href: '/study-plan', label: 'Study Plan', icon: Brain },
 ]
 
 export function Sidebar({ userEmail }: { userEmail?: string }) {

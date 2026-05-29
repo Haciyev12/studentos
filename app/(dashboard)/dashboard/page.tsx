@@ -13,7 +13,7 @@ export default async function DashboardPage() {
 
   const today = new Date().toISOString().split('T')[0]
 
-  const [{ data: upcomingDeadlines }, { data: recentSyllabi }, { data: profile }] =
+  const [{ data: upcomingDeadlines }, { data: recentSyllabi }, { data: profile }, { data: grades }] =
     await Promise.all([
       supabase
         .from('deadlines')
@@ -30,7 +30,15 @@ export default async function DashboardPage() {
         .order('created_at', { ascending: false })
         .limit(4),
       supabase.from('profiles').select('full_name').eq('id', user!.id).single(),
+      supabase.from('grades').select('grade_points, credits').eq('user_id', user!.id),
     ])
+
+  const cumulativeGpa = (() => {
+    if (!grades?.length) return null
+    const tp = grades.reduce((s, g) => s + g.grade_points * g.credits, 0)
+    const tc = grades.reduce((s, g) => s + g.credits, 0)
+    return tc > 0 ? tp / tc : null
+  })()
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there'
   const hour = new Date().getHours()
@@ -64,8 +72,15 @@ export default async function DashboardPage() {
           sub="uploaded"
           color="violet"
         />
-        <StatCard icon={TrendingUp} label="GPA" value="—" sub="coming soon" color="emerald" />
-        <StatCard icon={BookMarked} label="Progress" value="—" sub="coming soon" color="amber" />
+        <StatCard
+          icon={TrendingUp}
+          label="GPA"
+          value={cumulativeGpa !== null ? cumulativeGpa.toFixed(2) : '—'}
+          sub={cumulativeGpa !== null ? 'cumulative' : 'add grades'}
+          color="emerald"
+          href="/gpa"
+        />
+        <StatCard icon={BookMarked} label="Courses" value={String(recentSyllabi?.length ?? 0)} sub="with syllabi" color="amber" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
@@ -191,12 +206,14 @@ function StatCard({
   value,
   sub,
   color,
+  href,
 }: {
   icon: React.ElementType
   label: string
   value: string
   sub: string
   color: string
+  href?: string
 }) {
   const colors: Record<string, string> = {
     indigo: 'bg-indigo-500/10 text-indigo-400',
@@ -204,8 +221,8 @@ function StatCard({
     emerald: 'bg-emerald-500/10 text-emerald-400',
     amber: 'bg-amber-500/10 text-amber-400',
   }
-  return (
-    <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
+  const inner = (
+    <>
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${colors[color]}`}>
         <Icon className="w-4 h-4" />
       </div>
@@ -213,6 +230,18 @@ function StatCard({
       <p className="text-xs text-zinc-500 mt-0.5">
         <span className="text-zinc-400">{label}</span> {sub}
       </p>
+    </>
+  )
+  if (href) {
+    return (
+      <Link href={href} className="rounded-xl bg-zinc-900 border border-zinc-800 p-4 hover:border-zinc-700 transition-colors block">
+        {inner}
+      </Link>
+    )
+  }
+  return (
+    <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
+      {inner}
     </div>
   )
 }
