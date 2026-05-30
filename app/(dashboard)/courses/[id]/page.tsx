@@ -354,10 +354,16 @@ export default function CourseDetailPage() {
                 <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-zinc-500">
                   Study Groups for {course.name}
                 </h2>
-                <button onClick={() => { setShowCreateGroup(true); setNewGroupName(`${course.name} Study Group`) }}
-                  className="inline-flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500">
-                  <Plus className="w-3.5 h-3.5" /> Create group
-                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => fetchGroups(course.name)} disabled={loadingGroups}
+                    className="text-xs text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-zinc-300 disabled:opacity-50">
+                    {loadingGroups ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '↻ Refresh'}
+                  </button>
+                  <button onClick={() => { setShowCreateGroup(true); setNewGroupName(`${course.name} Study Group`) }}
+                    className="inline-flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500">
+                    <Plus className="w-3.5 h-3.5" /> Create group
+                  </button>
+                </div>
               </div>
 
               {showCreateGroup && (
@@ -390,8 +396,9 @@ export default function CourseDetailPage() {
               ) : courseGroups.length === 0 ? (
                 <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-dashed border-gray-200 dark:border-zinc-800 p-10 text-center shadow-sm">
                   <Users className="w-8 h-8 text-gray-300 dark:text-zinc-700 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-gray-500 dark:text-zinc-400">No groups yet for this course</p>
-                  <p className="text-xs text-gray-400 dark:text-zinc-600 mt-1">Be the first to create a study group!</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-zinc-400">No groups found for "{course.name}"</p>
+                  <p className="text-xs text-gray-400 dark:text-zinc-600 mt-1">If your group exists, make sure its name or course name contains "{course.name}"</p>
+                  <Link href="/groups" className="mt-3 inline-block text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Browse all groups →</Link>
                 </div>
               ) : (
                 <div className="space-y-2">
