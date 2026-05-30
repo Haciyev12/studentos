@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BookOpen, Brain, Calendar, GraduationCap, LayoutDashboard, LogOut, TrendingUp } from 'lucide-react'
+import { BookOpen, Brain, Calendar, GraduationCap, LayoutDashboard, LogOut, TrendingUp, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { useEffect, useState } from 'react'
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -13,10 +14,23 @@ const nav = [
   { href: '/calendar', label: 'Calendar', icon: Calendar },
   { href: '/gpa', label: 'GPA Tracker', icon: TrendingUp },
   { href: '/study-plan', label: 'Study Plan', icon: Brain },
+  { href: '/groups', label: 'Study Groups', icon: Users },
 ]
 
 export function Sidebar({ userEmail }: { userEmail?: string }) {
   const pathname = usePathname()
+  const [unread, setUnread] = useState(0)
+
+  useEffect(() => {
+    async function fetchUnread() {
+      const r = await fetch('/api/groups/unread-count')
+      const d = await r.json()
+      setUnread(d.total ?? 0)
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -53,6 +67,11 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
             >
               <Icon className={cn('w-4 h-4 shrink-0', active && 'text-indigo-600 dark:text-indigo-400')} />
               {label}
+              {href === '/groups' && unread > 0 && (
+                <span className="ml-auto bg-indigo-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
+                  {unread > 99 ? '99+' : unread}
+                </span>
+              )}
             </Link>
           )
         })}
