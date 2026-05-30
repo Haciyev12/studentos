@@ -145,17 +145,18 @@ export default function GpaPage() {
     fetch('/api/grades').then(r => r.json()).then(d => { setGrades(Array.isArray(d) ? d : []); setLoading(false) }).catch(() => setLoading(false))
   }, [])
 
-  const cumulativeGpa = calcGPA(grades)
-  const totalCredits = grades.reduce((s, g) => s + g.credits, 0)
+  const gradedGrades = grades.filter(g => !g.in_progress)
+  const cumulativeGpa = calcGPA(gradedGrades)
+  const totalCredits = gradedGrades.reduce((s, g) => s + g.credits, 0)
   const standing = getStanding(cumulativeGpa)
   const semesterGroups = groupBySemester(grades)
-  const semesterData = semesterGroups.map(([label, gs]) => ({ label, gpa: calcGPA(gs) }))
+  const semesterData = semesterGroups.map(([label, gs]) => ({ label, gpa: calcGPA(gs.filter(g => !g.in_progress)) })).filter(d => !isNaN(d.gpa))
 
   const whatIfGrades: Grade[] = whatIf.map(w => {
     const letter = w.useScore && w.score ? scoreToGrade(Number(w.score)) : w.letter
     return { id: '', user_id: '', course_code: null, semester: '', year: 0, created_at: '', course_name: w.name, credits: Number(w.credits) || 3, grade_letter: letter, grade_points: GRADE_POINTS[letter] ?? 0 }
   })
-  const projectedGpa = calcGPA([...grades, ...whatIfGrades])
+  const projectedGpa = calcGPA([...gradedGrades, ...whatIfGrades])
 
   const derivedLetter = form.useScore && form.score ? scoreToGrade(Number(form.score)) : form.grade_letter
   const derivedPoints = GRADE_POINTS[derivedLetter] ?? 0
@@ -169,7 +170,7 @@ export default function GpaPage() {
   async function handleSave() {
     if (!form.course_name.trim()) { toast.error('Course name is required'); return }
     setSaving(true)
-    const payload = { course_name: form.course_name.trim(), course_code: form.course_code.trim() || null, credits: Number(form.credits), grade_letter: derivedLetter, grade_points: derivedPoints, semester: form.semester, year: Number(form.year) }
+    const payload = { course_name: form.course_name.trim(), course_code: form.course_code.trim() || null, credits: Number(form.credits), grade_letter: derivedLetter, grade_points: derivedPoints, semester: form.semester, year: Number(form.year), in_progress: false }
     try {
       if (editingId) {
         const res = await fetch(`/api/grades/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -215,9 +216,9 @@ export default function GpaPage() {
         {[
           { icon: TrendingUp, label: 'Cumulative GPA', value: grades.length ? cumulativeGpa.toFixed(2) : '—', color: 'indigo' },
           { icon: BookOpen, label: 'Total Credits', value: String(totalCredits), color: 'violet' },
-          { icon: GraduationCap, label: 'Courses', value: String(grades.length), color: 'blue' },
+          { icon: GraduationCap, label: 'Courses', value: String(grades.length), color: 'blue', note: grades.some(g => g.in_progress) ? `${gradedGrades.length} graded` : undefined },
           { icon: Award, label: 'Standing', value: standing?.label ?? '—', color: 'emerald', small: true },
-        ].map(({ icon: Icon, label, value, color, small }) => {
+        ].map(({ icon: Icon, label, value, color, small, note }: { icon: any; label: string; value: string; color: string; small?: boolean; note?: string }) => {
           const colors: Record<string, string> = {
             indigo: 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
             violet: 'bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400',
@@ -231,6 +232,7 @@ export default function GpaPage() {
               </div>
               <p className={`font-bold tracking-tight text-gray-900 dark:text-zinc-100 ${small ? 'text-sm leading-tight' : 'text-xl'}`}>{value}</p>
               <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">{label}</p>
+              {note && <p className="text-[10px] text-gray-300 dark:text-zinc-600 mt-0.5">{note}</p>}
             </div>
           )
         })}
@@ -341,16 +343,28 @@ export default function GpaPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-zinc-800/40">
                   {semGrades.map(g => (
-                    <tr key={g.id} className="group hover:bg-gray-50 dark:hover:bg-zinc-800/30">
+                    <tr key={g.id} className={`group hover:bg-gray-50 dark:hover:bg-zinc-800/30 ${g.in_progress ? 'opacity-60' : ''}`}>
                       <td className="px-5 py-3">
-                        <p className="text-sm text-gray-900 dark:text-zinc-100">{g.course_name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-gray-900 dark:text-zinc-100">{g.course_name}</p>
+                          {g.in_progress && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 shrink-0">
+                              Not graded
+                            </span>
+                          )}
+                        </div>
                         {g.course_code && <p className="text-xs text-gray-400 dark:text-zinc-500">{g.course_code}</p>}
                       </td>
                       <td className="px-3 py-3 text-center text-sm text-gray-500 dark:text-zinc-400">{g.credits}</td>
                       <td className="px-3 py-3 text-center">
-                        <span className={`text-sm font-bold ${gradeColor(g.grade_points)}`}>{g.grade_letter}</span>
+                        {g.in_progress
+                          ? <span className="text-sm text-gray-300 dark:text-zinc-600">—</span>
+                          : <span className={`text-sm font-bold ${gradeColor(g.grade_points)}`}>{g.grade_letter}</span>
+                        }
                       </td>
-                      <td className="px-3 py-3 text-center text-sm text-gray-500 dark:text-zinc-400">{g.grade_points.toFixed(2)}</td>
+                      <td className="px-3 py-3 text-center text-sm text-gray-500 dark:text-zinc-400">
+                        {g.in_progress ? '—' : g.grade_points.toFixed(2)}
+                      </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 justify-end">
                           <button onClick={() => openEdit(g)} className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-700">

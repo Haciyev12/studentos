@@ -49,7 +49,39 @@ export default function CoursesPage() {
     const { error } = await supabase.from('courses').insert({ ...data, user_id: user!.id, code: data.code || null, professor: data.professor || null, semester: data.semester || null })
     setSaving(false)
     if (error) { toast.error(error.message); return }
-    toast.success('Course added')
+
+    // Check if this course already exists in GPA tracker (case-insensitive)
+    const { data: existingGrades } = await supabase
+      .from('grades')
+      .select('id')
+      .eq('user_id', user!.id)
+      .ilike('course_name', data.name)
+      .limit(1)
+
+    if (!existingGrades?.length) {
+      // Parse semester + year from the semester field (e.g. "Fall 2025")
+      const parts = (data.semester ?? '').split(' ')
+      const semLabel = parts[0] || 'Fall'
+      const semYear = parseInt(parts[1]) || new Date().getFullYear()
+      const validSems = ['Fall', 'Spring', 'Summer']
+      const sem = validSems.includes(semLabel) ? semLabel : 'Fall'
+
+      await supabase.from('grades').insert({
+        user_id: user!.id,
+        course_name: data.name,
+        course_code: data.code || null,
+        credits: data.credits,
+        grade_letter: 'IP',
+        grade_points: 0,
+        semester: sem,
+        year: semYear,
+        in_progress: true,
+      })
+      toast.success('Course added · Added to GPA tracker as "Not graded yet"')
+    } else {
+      toast.success('Course added')
+    }
+
     reset({ color: COURSE_COLORS[0], credits: 3 })
     setShowForm(false); fetchCourses()
   }

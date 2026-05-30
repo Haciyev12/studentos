@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   AlertCircle, ArrowLeft, Bot, CalendarDays, Check, CheckCircle2,
-  Edit2, FileText, Loader2, MessageSquare, Plus, Send, Sparkles, Trash2, Upload, X,
+  Edit2, FileText, Loader2, MessageSquare, Plus, Send, Sparkles, Trash2, Upload, Users, X,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
@@ -32,7 +32,16 @@ export default function CourseDetailPage() {
   const [dragOver, setDragOver] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
-  const [activeTab, setActiveTab] = useState<'deadlines' | 'chat'>('deadlines')
+  const [activeTab, setActiveTab] = useState<'deadlines' | 'chat' | 'groups'>('deadlines')
+
+  // Groups tab state
+  type GroupSummary = { id: string; name: string; course_name: string | null; description: string | null; invite_code: string; member_count: number; is_member: boolean }
+  const [courseGroups, setCourseGroups] = useState<GroupSummary[]>([])
+  const [loadingGroups, setLoadingGroups] = useState(false)
+  const [showCreateGroup, setShowCreateGroup] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [newGroupDesc, setNewGroupDesc] = useState('')
+  const [savingGroup, setSavingGroup] = useState(false)
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([])
@@ -52,6 +61,44 @@ export default function CourseDetailPage() {
 
   useEffect(() => { fetchAll() }, [id])
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
+
+  async function fetchGroups(courseName: string) {
+    setLoadingGroups(true)
+    const params = new URLSearchParams({ name: courseName })
+    if (id) params.set('courseId', id)
+    const res = await fetch(`/api/groups/by-course?${params}`)
+    if (res.ok) setCourseGroups(await res.json())
+    setLoadingGroups(false)
+  }
+
+  async function createGroupForCourse() {
+    if (!newGroupName.trim() || !course) return
+    setSavingGroup(true)
+    const res = await fetch('/api/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newGroupName.trim(), course_name: course.name, description: newGroupDesc.trim() || null, course_id: id }),
+    })
+    if (res.ok) {
+      toast.success('Group created!')
+      setShowCreateGroup(false); setNewGroupName(''); setNewGroupDesc('')
+      fetchGroups(course.name)
+    } else {
+      const err = await res.json()
+      toast.error(err.error ?? 'Failed to create group')
+    }
+    setSavingGroup(false)
+  }
+
+  async function joinGroupFromCourse(inviteCode: string) {
+    const res = await fetch('/api/groups/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invite_code: inviteCode }),
+    })
+    if (res.ok) { toast.success('Joined!'); if (course) fetchGroups(course.name) }
+    else { const err = await res.json(); toast.error(err.error ?? 'Failed to join') }
+  }
 
   async function handleUpload(file: File) {
     if (!file.type.includes('pdf')) { toast.error('Please upload a PDF file'); return }
@@ -237,8 +284,12 @@ export default function CourseDetailPage() {
           {[
             { key: 'deadlines', label: `Deadlines (${deadlines.length})`, icon: CalendarDays },
             { key: 'chat', label: 'AI Chat', icon: Bot },
+            { key: 'groups', label: 'Groups', icon: Users },
           ].map(({ key, label, icon: Icon }) => (
-            <button key={key} onClick={() => setActiveTab(key as typeof activeTab)}
+            <button key={key} onClick={() => {
+              setActiveTab(key as typeof activeTab)
+              if (key === 'groups' && course) fetchGroups(course.name)
+            }}
               className={cn('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all', activeTab === key ? 'bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100 shadow-sm' : 'text-gray-500 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300')}
             >
               <Icon className="w-4 h-4" />
@@ -294,6 +345,79 @@ export default function CourseDetailPage() {
                       )}
                     </AnimatePresence>
                   </ul>
+                </div>
+              )}
+            </motion.div>
+          ) : activeTab === 'groups' ? (
+            <motion.div key="groups" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-zinc-500">
+                  Study Groups for {course.name}
+                </h2>
+                <button onClick={() => { setShowCreateGroup(true); setNewGroupName(`${course.name} Study Group`) }}
+                  className="inline-flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500">
+                  <Plus className="w-3.5 h-3.5" /> Create group
+                </button>
+              </div>
+
+              {showCreateGroup && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                  className="mb-3 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 p-4 shadow-sm">
+                  <p className="text-xs font-medium text-gray-500 dark:text-zinc-400 mb-3">New study group</p>
+                  <div className="space-y-2">
+                    <input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="Group name"
+                      className="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500" />
+                    <input value={newGroupDesc} onChange={e => setNewGroupDesc(e.target.value)} placeholder="Description (optional)"
+                      className="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500" />
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={createGroupForCourse} disabled={savingGroup || !newGroupName.trim()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 rounded-lg text-xs font-medium text-white">
+                      {savingGroup ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Create
+                    </button>
+                    <button onClick={() => { setShowCreateGroup(false); setNewGroupName(''); setNewGroupDesc('') }}
+                      className="px-3 py-1.5 rounded-lg text-xs text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800">
+                      Cancel
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {loadingGroups ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => <div key={i} className="h-16 rounded-xl bg-gray-100 dark:bg-zinc-800 animate-pulse" />)}
+                </div>
+              ) : courseGroups.length === 0 ? (
+                <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-dashed border-gray-200 dark:border-zinc-800 p-10 text-center shadow-sm">
+                  <Users className="w-8 h-8 text-gray-300 dark:text-zinc-700 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-gray-500 dark:text-zinc-400">No groups yet for this course</p>
+                  <p className="text-xs text-gray-400 dark:text-zinc-600 mt-1">Be the first to create a study group!</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {courseGroups.map((g, i) => (
+                    <motion.div key={g.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                      className="flex items-center gap-4 p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 shadow-sm">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center shrink-0">
+                        <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">{g.name}</p>
+                        {g.description && <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5 truncate">{g.description}</p>}
+                        <p className="text-xs text-gray-400 dark:text-zinc-600 mt-0.5">{g.member_count} member{g.member_count !== 1 ? 's' : ''}</p>
+                      </div>
+                      {g.is_member ? (
+                        <Link href={`/groups/${g.id}`} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20">
+                          Open →
+                        </Link>
+                      ) : (
+                        <button onClick={() => joinGroupFromCourse(g.invite_code)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white">
+                          Join
+                        </button>
+                      )}
+                    </motion.div>
+                  ))}
                 </div>
               )}
             </motion.div>

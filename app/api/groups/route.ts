@@ -29,12 +29,12 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { name, course_name, section, description } = await req.json()
+  const { name, course_name, section, description, course_id } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
 
   const { data: group, error: groupError } = await supabase
     .from('course_groups')
-    .insert({ name: name.trim(), course_name: course_name?.trim(), section: section?.trim(), description: description?.trim(), created_by: user.id })
+    .insert({ name: name.trim(), course_name: course_name?.trim(), section: section?.trim(), description: description?.trim(), created_by: user.id, course_id: course_id ?? null })
     .select()
     .single()
 

@@ -67,6 +67,7 @@ export interface Grade {
   grade_points: number
   semester: string
   year: number
+  in_progress?: boolean
   created_at: string
 }
 
