@@ -48,7 +48,7 @@ ${syllabus.extracted_text.slice(0, 30000)}`,
   ]
 
   const client = getClient()
-  const MODEL = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.0-flash-exp:free'
+  const MODEL = process.env.OPENROUTER_MODEL ?? 'google/gemma-4-31b-it:free'
 
   const completion = await client.chat.completions.create({
     model: MODEL,

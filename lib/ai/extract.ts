@@ -7,6 +7,7 @@ const VALID_TYPES: DeadlineType[] = ['assignment', 'quiz', 'exam', 'project', 'o
 function getModels(): string[] {
   const custom = process.env.OPENROUTER_MODEL
   const defaults = [
+    'google/gemma-4-31b-it:free',
     'google/gemini-2.0-flash-exp:free',
     'google/gemma-3-27b-it:free',
     'meta-llama/llama-3.3-70b-instruct:free',
