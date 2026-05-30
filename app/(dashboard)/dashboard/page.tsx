@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { AlertCircle, BookMarked, Calendar, Check, Clock, FileUp, TrendingUp } from 'lucide-react'
+import { AlertCircle, BookMarked, Calendar, Check, Clock, FileUp, TrendingUp, Users } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [gpa, setGpa] = useState<number | null>(null)
   const [email, setEmail] = useState('')
   const [overdueCount, setOverdueCount] = useState(0)
+  const [userCount, setUserCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [completingId, setCompletingId] = useState<string | null>(null)
   const [flashId, setFlashId] = useState<string | null>(null)
@@ -43,11 +44,12 @@ export default function DashboardPage() {
     setEmail(user.email ?? '')
     const today = new Date().toISOString().split('T')[0]
 
-    const [{ data: dl }, { data: sy }, { data: grades }, { data: overdue }] = await Promise.all([
+    const [{ data: dl }, { data: sy }, { data: grades }, { data: overdue }, { data: uc }] = await Promise.all([
       supabase.from('deadlines').select('id, title, type, due_date, completed, course:courses(name, code, color)').eq('user_id', user.id).eq('completed', false).gte('due_date', today).order('due_date', { ascending: true }).limit(8) as any,
       supabase.from('syllabi').select('id, file_name, status, created_at, course:courses(name)').eq('user_id', user.id).order('created_at', { ascending: false }).limit(4) as any,
-      supabase.from('grades').select('grade_points, credits').eq('user_id', user.id),
+      supabase.from('grades').select('grade_points, credits').eq('user_id', user.id).eq('in_progress', false),
       supabase.from('deadlines').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('completed', false).lt('due_date', today),
+      supabase.rpc('get_total_user_count').single(),
     ])
 
     const tp = grades?.reduce((s, g) => s + g.grade_points * g.credits, 0) ?? 0
@@ -57,6 +59,7 @@ export default function DashboardPage() {
     setSyllabi(sy ?? [])
     setGpa(tc > 0 ? tp / tc : null)
     setOverdueCount(overdue?.length ?? 0)
+    setUserCount(Number(uc) || 0)
     setLoading(false)
   }
 
@@ -81,7 +84,7 @@ export default function DashboardPage() {
     { icon: Clock, label: 'Upcoming', value: deadlines.length, sub: 'deadlines', color: 'indigo' },
     { icon: FileUp, label: 'Syllabi', value: syllabi.length, sub: 'uploaded', color: 'violet' },
     { icon: TrendingUp, label: 'GPA', value: gpa ?? 0, sub: gpa !== null ? 'cumulative' : 'add grades', color: 'emerald', decimals: 2, href: '/gpa', dash: gpa === null },
-    { icon: BookMarked, label: 'Courses', value: syllabi.length, sub: 'with syllabi', color: 'amber' },
+    { icon: Users, label: 'Students', value: userCount, sub: 'using ADA Scholar', color: 'amber' },
   ]
 
   const colorMap: Record<string, string> = {

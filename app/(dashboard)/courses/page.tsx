@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { GraduationCap, Loader2, Plus, X } from 'lucide-react'
+import { GraduationCap, Loader2, Plus, Trash2, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Course } from '@/types'
 import { COURSE_COLORS } from '@/types'
@@ -39,6 +39,17 @@ export default function CoursesPage() {
   async function fetchCourses() {
     const { data } = await supabase.from('courses').select('*').order('created_at', { ascending: false })
     setCourses(data ?? []); setLoading(false)
+  }
+
+  async function deleteCourse(courseId: string, e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    if (!confirm('Delete this course and all its deadlines?')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('deadlines').delete().eq('course_id', courseId)
+    await supabase.from('syllabi').delete().eq('course_id', courseId)
+    await supabase.from('courses').delete().eq('id', courseId).eq('user_id', user!.id)
+    toast.success('Course deleted')
+    fetchCourses()
   }
 
   useEffect(() => { fetchCourses() }, [])
@@ -182,7 +193,15 @@ export default function CoursesPage() {
                   {[course.professor, course.semester, `${course.credits} credits`].filter(Boolean).join(' · ')}
                 </p>
               </div>
-              <span className="text-xs text-gray-400 dark:text-zinc-600 group-hover:text-indigo-600 dark:group-hover:text-zinc-400">View →</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-gray-400 dark:text-zinc-600 group-hover:text-indigo-600 dark:group-hover:text-zinc-400">View →</span>
+                <button
+                  onClick={e => deleteCourse(course.id, e)}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-300 dark:text-zinc-700 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </Link>
           ))}
         </div>

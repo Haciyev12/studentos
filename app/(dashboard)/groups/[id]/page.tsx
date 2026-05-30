@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, MessageSquare, CheckSquare, FileText, Trophy, Target, Send, Pin, Bell, Plus, Check, Trash2, ChevronDown, Loader2, Users, Hash, Copy, CheckCheck, AlertCircle, PartyPopper } from 'lucide-react'
+import { ArrowLeft, MessageSquare, CheckSquare, FileText, Trophy, Target, Send, Pin, Bell, Plus, Check, Trash2, ChevronDown, Loader2, Users, Hash, Copy, CheckCheck, AlertCircle, PartyPopper, X, Linkedin, GraduationCap } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
@@ -39,7 +39,8 @@ export default function GroupPage({ params }: { params: { id: string } }) {
   const [members, setMembers] = useState<Member[]>([])
   const [myUserId, setMyUserId] = useState('')
   const [codeCopied, setCodeCopied] = useState(false)
-  const [showMembers, setShowMembers] = useState(false)
+  const [showMembers, setShowMembers] = useState(true)
+  const [profileUserId, setProfileUserId] = useState<string | null>(null)
 
   useEffect(() => {
     loadGroup()
@@ -100,21 +101,29 @@ export default function GroupPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      {/* Members dropdown */}
+      {/* Members panel */}
       <AnimatePresence>
         {showMembers && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             className="shrink-0 border-b border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/60 overflow-hidden">
-            <div className="flex gap-4 px-6 py-3 flex-wrap">
+            <div className="flex gap-2 px-6 py-3 flex-wrap">
               {members.map(m => (
-                <div key={m.id} className="flex items-center gap-1.5">
+                <button key={m.id} onClick={() => setProfileUserId(m.user_id)}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-zinc-800 transition-colors group">
                   <span className="text-base">{m.avatar_emoji ?? '🎓'}</span>
-                  <span className="text-xs text-gray-700 dark:text-zinc-300">{m.display_name ?? 'Student'}</span>
+                  <span className="text-xs text-gray-700 dark:text-zinc-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{m.display_name ?? 'Student'}</span>
                   {m.role === 'admin' && <span className="text-[10px] text-indigo-500">admin</span>}
-                </div>
+                </button>
               ))}
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Member profile modal */}
+      <AnimatePresence>
+        {profileUserId && (
+          <MemberProfileModal userId={profileUserId} members={members} onClose={() => setProfileUserId(null)} />
         )}
       </AnimatePresence>
 
@@ -141,6 +150,75 @@ export default function GroupPage({ params }: { params: { id: string } }) {
         </AnimatePresence>
       </div>
     </div>
+  )
+}
+
+// ─── MEMBER PROFILE MODAL ────────────────────────────────────────────────────
+
+function MemberProfileModal({ userId, members, onClose }: { userId: string; members: Member[]; onClose: () => void }) {
+  const member = members.find(m => m.user_id === userId)
+  const [profile, setProfile] = useState<{ display_name?: string; avatar_emoji?: string; photo_url?: string; major?: string; graduating_year?: number; linkedin_url?: string } | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/account/public/${userId}`)
+      .then(r => r.json())
+      .then(d => setProfile(d))
+  }, [userId])
+
+  const name = profile?.display_name ?? member?.display_name ?? 'Student'
+  const emoji = profile?.avatar_emoji ?? member?.avatar_emoji ?? '🎓'
+
+  return (
+    <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}>
+      <motion.div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+        initial={{ scale: 0.92, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0 }}
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center overflow-hidden">
+              {profile?.photo_url
+                ? <img src={profile.photo_url} alt={name} className="w-full h-full object-cover" />
+                : <span className="text-3xl">{emoji}</span>
+              }
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 dark:text-zinc-100">{name}</p>
+              {member?.role === 'admin' && <span className="text-xs text-indigo-500">Group admin</span>}
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {!profile ? (
+          <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-gray-300" /></div>
+        ) : (
+          <div className="space-y-3">
+            {profile.major && (
+              <div className="flex items-center gap-2 text-sm">
+                <GraduationCap className="w-4 h-4 text-indigo-500 shrink-0" />
+                <span className="text-gray-700 dark:text-zinc-300">{profile.major}</span>
+                {profile.graduating_year && <span className="text-xs text-gray-400 dark:text-zinc-500">· Class of {profile.graduating_year}</span>}
+              </div>
+            )}
+            {profile.linkedin_url ? (
+              <a href={profile.linkedin_url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 transition-colors">
+                <Linkedin className="w-4 h-4 shrink-0" />
+                <span className="truncate">LinkedIn Profile</span>
+              </a>
+            ) : (
+              !profile.major && (
+                <p className="text-sm text-gray-400 dark:text-zinc-500 text-center py-2">No profile details yet</p>
+              )
+            )}
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -507,6 +585,88 @@ function DeadlinesTab({ groupId, myUserId, members }: { groupId: string; myUserI
 
 // ─── NOTES TAB ───────────────────────────────────────────────────────────────
 
+// ─── RICH TEXT EDITOR ────────────────────────────────────────────────────────
+
+const HIGHLIGHTS = [
+  { color: '#fef08a', label: 'Yellow' },
+  { color: '#bbf7d0', label: 'Green' },
+  { color: '#bfdbfe', label: 'Blue' },
+  { color: '#fce7f3', label: 'Pink' },
+  { color: '#fed7aa', label: 'Orange' },
+]
+
+function RichTextEditor({ initialContent, onChange }: { initialContent: string; onChange: (v: string) => void }) {
+  const editorRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = initialContent
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function exec(cmd: string, value?: string) {
+    document.execCommand(cmd, false, value)
+    editorRef.current?.focus()
+    onChange(editorRef.current?.innerHTML ?? '')
+  }
+
+  function handleInput() {
+    onChange(editorRef.current?.innerHTML ?? '')
+  }
+
+  const btnCls = 'px-2 py-1 rounded text-sm font-medium text-gray-600 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors'
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Toolbar */}
+      <div className="shrink-0 flex items-center gap-1 px-3 py-2 border-b border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800/60 flex-wrap">
+        <button onMouseDown={e => { e.preventDefault(); exec('bold') }} className={btnCls} title="Bold (Ctrl+B)">
+          <span className="font-bold">B</span>
+        </button>
+        <button onMouseDown={e => { e.preventDefault(); exec('italic') }} className={btnCls} title="Italic (Ctrl+I)">
+          <span className="italic">I</span>
+        </button>
+        <button onMouseDown={e => { e.preventDefault(); exec('underline') }} className={btnCls} title="Underline (Ctrl+U)">
+          <span className="underline">U</span>
+        </button>
+        <button onMouseDown={e => { e.preventDefault(); exec('strikeThrough') }} className={btnCls} title="Strikethrough">
+          <span className="line-through">S</span>
+        </button>
+        <div className="w-px h-4 bg-gray-300 dark:bg-zinc-600 mx-1" />
+        {/* Heading sizes */}
+        <button onMouseDown={e => { e.preventDefault(); exec('fontSize', '5') }} className={`${btnCls} text-xs`} title="Large text">H1</button>
+        <button onMouseDown={e => { e.preventDefault(); exec('fontSize', '3') }} className={`${btnCls} text-xs`} title="Normal text">H2</button>
+        <div className="w-px h-4 bg-gray-300 dark:bg-zinc-600 mx-1" />
+        {/* Highlight colors */}
+        <span className="text-xs text-gray-400 dark:text-zinc-500 mr-1">Highlight:</span>
+        {HIGHLIGHTS.map(h => (
+          <button
+            key={h.color}
+            onMouseDown={e => { e.preventDefault(); exec('hiliteColor', h.color) }}
+            className="w-5 h-5 rounded-full border-2 border-white dark:border-zinc-800 hover:scale-125 transition-transform shadow-sm"
+            style={{ backgroundColor: h.color }}
+            title={h.label}
+          />
+        ))}
+        <div className="w-px h-4 bg-gray-300 dark:bg-zinc-600 mx-1" />
+        <button onMouseDown={e => { e.preventDefault(); exec('removeFormat') }} className={`${btnCls} text-xs text-gray-400`} title="Clear formatting">
+          Clear
+        </button>
+      </div>
+      {/* Editable area */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleInput}
+        className="flex-1 p-5 text-sm text-gray-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 focus:outline-none overflow-y-auto leading-relaxed"
+        style={{ minHeight: 0 }}
+      />
+    </div>
+  )
+}
+
 function NotesTab({ groupId }: { groupId: string }) {
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
@@ -586,12 +746,12 @@ function NotesTab({ groupId }: { groupId: string }) {
       </div>
 
       {editing ? (
-        <textarea value={editContent} onChange={e => setEditContent(e.target.value)}
-          className="flex-1 p-5 text-sm text-gray-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 focus:outline-none resize-none font-mono leading-relaxed" />
+        <RichTextEditor initialContent={editContent} onChange={setEditContent} />
       ) : (
         <div className="flex-1 overflow-y-auto p-5">
           {selected.content ? (
-            <pre className="text-sm text-gray-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed font-mono">{selected.content}</pre>
+            <div className="text-sm text-gray-800 dark:text-zinc-200 leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+              dangerouslySetInnerHTML={{ __html: selected.content }} />
           ) : (
             <p className="text-sm text-gray-400 dark:text-zinc-500 italic">No content yet. Click Edit to start writing.</p>
           )}

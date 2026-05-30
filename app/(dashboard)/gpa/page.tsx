@@ -94,6 +94,11 @@ function GpaChart({ semesterData }: { semesterData: { label: string; gpa: number
         {/* Data points bounce in after line */}
         {reversed.map((d, i) => (
           <g key={i}>
+            {/* Always-visible GPA value label above point */}
+            <motion.text x={xs[i]} y={ys[i] - 13} textAnchor="middle" fill="#6366f1" fontSize="9" fontWeight="700"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.0 + i * 0.07 }}>
+              {d.gpa.toFixed(2)}
+            </motion.text>
             {/* Hover target (invisible, larger) */}
             <circle cx={xs[i]} cy={ys[i]} r="14" fill="transparent"
               onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} style={{ cursor: 'pointer' }} />
@@ -106,8 +111,6 @@ function GpaChart({ semesterData }: { semesterData: { label: string; gpa: number
             <text x={xs[i]} y={H - 4} textAnchor="middle" fill="currentColor" fillOpacity="0.5" fontSize="8" className="text-gray-900 dark:text-white">
               {d.label.split(' ')[0].slice(0, 3)} {d.label.split(' ')[1]?.slice(2)}
             </text>
-            {/* Tooltip that slides up on hover */}
-            <AnimatedTooltip show={hovered === i} x={xs[i]} y={ys[i]} label={d.label} gpa={d.gpa} />
           </g>
         ))}
       </svg>
