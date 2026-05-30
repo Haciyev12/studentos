@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { BookOpen, Brain, Calendar, GraduationCap, LayoutDashboard, LogOut, TrendingUp, Users } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
@@ -20,6 +21,7 @@ const nav = [
 export function Sidebar({ userEmail }: { userEmail?: string }) {
   const pathname = usePathname()
   const [unread, setUnread] = useState(0)
+  const [hovered, setHovered] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchUnread() {
@@ -54,23 +56,58 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
       <nav className="flex-1 p-3 space-y-0.5">
         {nav.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
+          const isHovered = hovered === href
+
           return (
             <Link
               key={href}
               href={href}
+              onMouseEnter={() => setHovered(href)}
+              onMouseLeave={() => setHovered(null)}
               className={cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                'relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 active
-                  ? 'bg-indigo-50 dark:bg-zinc-900 text-indigo-700 dark:text-zinc-100'
-                  : 'text-gray-500 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-900/60'
+                  ? 'text-indigo-700 dark:text-zinc-100'
+                  : 'text-gray-500 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300'
               )}
             >
-              <Icon className={cn('w-4 h-4 shrink-0', active && 'text-indigo-600 dark:text-indigo-400')} />
-              {label}
+              {/* Animated background: active item */}
+              {active && (
+                <motion.div
+                  layoutId="sidebar-active-bg"
+                  className="absolute inset-0 rounded-lg bg-indigo-50 dark:bg-zinc-900"
+                  transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                />
+              )}
+              {/* Hover background (only for non-active) */}
+              {!active && isHovered && (
+                <motion.div
+                  layoutId="sidebar-hover-bg"
+                  className="absolute inset-0 rounded-lg bg-gray-100 dark:bg-zinc-900/60"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                />
+              )}
+              {/* Active left border indicator */}
+              {active && (
+                <motion.div
+                  layoutId="sidebar-indicator"
+                  className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-indigo-600 dark:bg-indigo-400"
+                  transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                />
+              )}
+              <Icon className={cn('w-4 h-4 shrink-0 relative z-10', active ? 'text-indigo-600 dark:text-indigo-400' : '')} />
+              <span className="relative z-10">{label}</span>
               {href === '/groups' && unread > 0 && (
-                <span className="ml-auto bg-indigo-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="relative z-10 ml-auto bg-indigo-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none"
+                >
                   {unread > 99 ? '99+' : unread}
-                </span>
+                </motion.span>
               )}
             </Link>
           )

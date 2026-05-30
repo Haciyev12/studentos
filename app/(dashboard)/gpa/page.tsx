@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Plus, Trash2, Pencil, X, TrendingUp, BookOpen, Award, GraduationCap } from 'lucide-react'
 import { Grade, GRADE_POINTS, GRADE_RANGES, scoreToGrade } from '@/types'
@@ -49,6 +50,7 @@ function gradeColor(points: number) {
 
 function GpaChart({ semesterData }: { semesterData: { label: string; gpa: number }[] }) {
   if (semesterData.length < 2) return null
+  const [hovered, setHovered] = useState<number | null>(null)
   const reversed = [...semesterData].reverse()
   const W = 400, H = 140, PX = 36, PY = 20
   const ys = reversed.map((d) => H - PY - (d.gpa / 4.0) * (H - PY * 2))
@@ -59,7 +61,7 @@ function GpaChart({ semesterData }: { semesterData: { label: string; gpa: number
   return (
     <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-5 shadow-sm">
       <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-100 mb-4">GPA Trend</h3>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto overflow-visible">
         <defs>
           <linearGradient id="gpa-grad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#6366f1" stopOpacity="0.15" />
@@ -75,22 +77,54 @@ function GpaChart({ semesterData }: { semesterData: { label: string; gpa: number
             </g>
           )
         })}
-        <path d={area} fill="url(#gpa-grad)" />
-        <path d={path} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {/* Area fill */}
+        <motion.path d={area} fill="url(#gpa-grad)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.7 }} />
+        {/* Line draws itself */}
+        <motion.path
+          d={path}
+          fill="none"
+          stroke="#6366f1"
+          strokeWidth="2.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{ duration: 0.9, ease: 'easeInOut', delay: 0.1 }}
+        />
+        {/* Data points bounce in after line */}
         {reversed.map((d, i) => (
           <g key={i}>
-            <circle cx={xs[i]} cy={ys[i]} r="4" fill="#6366f1" />
-            <circle cx={xs[i]} cy={ys[i]} r="7" fill="#6366f1" fillOpacity="0.15" />
+            {/* Hover target (invisible, larger) */}
+            <circle cx={xs[i]} cy={ys[i]} r="14" fill="transparent"
+              onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} style={{ cursor: 'pointer' }} />
+            <motion.circle cx={xs[i]} cy={ys[i]} r="7" fill="#6366f1" fillOpacity="0.15"
+              initial={{ scale: 0 }} animate={{ scale: 1 }}
+              transition={{ delay: 0.9 + i * 0.07, type: 'spring', stiffness: 400, damping: 15 }} />
+            <motion.circle cx={xs[i]} cy={ys[i]} r="4" fill="#6366f1"
+              initial={{ scale: 0 }} animate={{ scale: hovered === i ? 1.4 : 1 }}
+              transition={{ delay: hovered === i ? 0 : 0.9 + i * 0.07, type: 'spring', stiffness: 400, damping: 15 }} />
             <text x={xs[i]} y={H - 4} textAnchor="middle" fill="currentColor" fillOpacity="0.5" fontSize="8" className="text-gray-900 dark:text-white">
               {d.label.split(' ')[0].slice(0, 3)} {d.label.split(' ')[1]?.slice(2)}
             </text>
-            <text x={xs[i]} y={ys[i] - 10} textAnchor="middle" fill="#6366f1" fontSize="9" fontWeight="600">
-              {d.gpa.toFixed(2)}
-            </text>
+            {/* Tooltip that slides up on hover */}
+            <AnimatedTooltip show={hovered === i} x={xs[i]} y={ys[i]} label={d.label} gpa={d.gpa} />
           </g>
         ))}
       </svg>
     </div>
+  )
+}
+
+function AnimatedTooltip({ show, x, y, label, gpa }: { show: boolean; x: number; y: number; label: string; gpa: number }) {
+  if (!show) return null
+  const tooltipY = y - 32
+  const clampedX = Math.max(40, Math.min(360, x))
+  return (
+    <g>
+      <rect x={clampedX - 28} y={tooltipY - 14} width="56" height="22" rx="4" fill="#1e1b4b" opacity="0.9" />
+      <text x={clampedX} y={tooltipY - 1} textAnchor="middle" fill="white" fontSize="9" fontWeight="700">{gpa.toFixed(2)}</text>
+      <text x={clampedX} y={tooltipY + 9} textAnchor="middle" fill="white" fontSize="7" opacity="0.7">{label}</text>
+    </g>
   )
 }
 

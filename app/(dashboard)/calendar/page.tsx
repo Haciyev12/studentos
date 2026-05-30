@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { addMonths, format, getDaysInMonth, startOfMonth, subMonths } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -15,15 +16,25 @@ export default function CalendarPage() {
   const [deadlines, setDeadlines] = useState<(Deadline & { course_name?: string; course_color?: string })[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
+  const [dotsReady, setDotsReady] = useState(false)
 
   useEffect(() => {
     async function load() {
       const { data } = await supabase.from('deadlines').select('*, course:courses(name, color)').order('due_date', { ascending: true })
       setDeadlines((data ?? []).map(d => ({ ...d, course_name: (d.course as any)?.name, course_color: (d.course as any)?.color })))
       setLoading(false)
+      // small delay so dots animate after calendar grid renders
+      setTimeout(() => setDotsReady(true), 80)
     }
     load()
   }, [])
+
+  // Reset dots bounce on month change
+  useEffect(() => {
+    setDotsReady(false)
+    const t = setTimeout(() => setDotsReady(true), 80)
+    return () => clearTimeout(t)
+  }, [currentDate])
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -78,6 +89,7 @@ export default function CalendarPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_260px] gap-6">
+        {/* Calendar grid */}
         <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden shadow-sm">
           <div className="grid grid-cols-7 border-b border-gray-100 dark:border-zinc-800">
             {DAYS.map(d => (
@@ -95,22 +107,40 @@ export default function CalendarPage() {
                   key={day}
                   onClick={() => setSelected(selected === String(day) ? null : String(day))}
                   className={cn(
-                    'h-24 p-1.5 border-b border-r border-gray-100 dark:border-zinc-800/50 text-left align-top hover:bg-gray-50 dark:hover:bg-zinc-800/50',
+                    'h-24 p-1.5 border-b border-r border-gray-100 dark:border-zinc-800/50 text-left align-top hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors',
                     (i + 1) % 7 === 0 && 'border-r-0',
                     isSelected && 'bg-indigo-50/50 dark:bg-indigo-500/5'
                   )}
                 >
-                  <span className={cn('text-xs font-medium flex items-center justify-center w-6 h-6 rounded-full mb-1', isToday ? 'bg-indigo-600 text-white' : 'text-gray-500 dark:text-zinc-400')}>
+                  <span className={cn(
+                    'text-xs font-medium flex items-center justify-center w-6 h-6 rounded-full mb-1 transition-colors',
+                    isToday
+                      ? 'bg-indigo-600 text-white animate-today-ring'
+                      : 'text-gray-500 dark:text-zinc-400'
+                  )}>
                     {day}
                   </span>
                   <div className="space-y-0.5">
-                    {dayDeadlines.slice(0, 3).map(d => (
-                      <div key={d.id} className="flex items-center gap-1 px-1 rounded" style={{ backgroundColor: (d.course_color ?? '#6366F1') + '18' }}>
+                    {dayDeadlines.slice(0, 3).map((d, di) => (
+                      <div
+                        key={d.id}
+                        className={cn(
+                          'flex items-center gap-1 px-1 rounded',
+                          dotsReady && 'animate-dot-bounce'
+                        )}
+                        style={{
+                          backgroundColor: (d.course_color ?? '#6366F1') + '18',
+                          animationDelay: `${di * 60}ms`,
+                          animationFillMode: 'both',
+                        }}
+                      >
                         <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: d.course_color ?? '#6366F1' }} />
                         <span className="text-[10px] truncate leading-4" style={{ color: d.course_color ?? '#6366F1' }}>{d.title}</span>
                       </div>
                     ))}
-                    {dayDeadlines.length > 3 && <p className="text-[10px] text-gray-400 dark:text-zinc-600 px-1">+{dayDeadlines.length - 3} more</p>}
+                    {dayDeadlines.length > 3 && (
+                      <p className="text-[10px] text-gray-400 dark:text-zinc-600 px-1">+{dayDeadlines.length - 3} more</p>
+                    )}
                   </div>
                 </button>
               )
@@ -118,47 +148,88 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        <div>
-          {selected && selectedDeadlines.length > 0 ? (
-            <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-zinc-800">
-                <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">{format(new Date(year, month, parseInt(selected)), 'MMMM d')}</p>
-                <p className="text-xs text-gray-400 dark:text-zinc-500">{selectedDeadlines.length} deadline{selectedDeadlines.length !== 1 ? 's' : ''}</p>
-              </div>
-              <ul className="divide-y divide-gray-100 dark:divide-zinc-800/60">
-                {selectedDeadlines.map(d => (
-                  <li key={d.id} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800/30">
-                    <div className="flex items-start gap-2">
-                      <div className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: d.course_color ?? '#6366F1' }} />
-                      <div className="min-w-0 flex-1">
-                        <p className={cn('text-sm font-medium truncate text-gray-900 dark:text-zinc-100', d.completed && 'line-through text-gray-400 dark:text-zinc-500')}>
-                          {d.title}
-                        </p>
-                        <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">{d.course_name}</p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className={cn('text-xs px-1.5 py-0.5 rounded', DEADLINE_TYPE_STYLES[d.type])}>{DEADLINE_TYPE_LABELS[d.type]}</span>
-                          {d.weight != null && <span className="text-xs text-gray-400 dark:text-zinc-500">{d.weight}%</span>}
+        {/* Side panel — slides in from right */}
+        <div className="relative overflow-hidden">
+          <AnimatePresence mode="wait">
+            {selected && selectedDeadlines.length > 0 ? (
+              <motion.div
+                key={selected}
+                initial={{ x: 24, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -16, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden shadow-sm"
+              >
+                <div className="px-4 py-3 border-b border-gray-100 dark:border-zinc-800">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">
+                    {format(new Date(year, month, parseInt(selected)), 'MMMM d')}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-zinc-500">
+                    {selectedDeadlines.length} deadline{selectedDeadlines.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <ul className="divide-y divide-gray-100 dark:divide-zinc-800/60">
+                  {selectedDeadlines.map((d, i) => {
+                    const isPast = new Date(d.due_date + 'T00:00:00') < today && !d.completed
+                    return (
+                      <motion.li
+                        key={d.id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800/30 transition-colors"
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: d.course_color ?? '#6366F1' }} />
+                          <div className="min-w-0 flex-1">
+                            <p className={cn('text-sm font-medium truncate text-gray-900 dark:text-zinc-100', d.completed && 'line-through text-gray-400 dark:text-zinc-500')}>
+                              {d.title}
+                            </p>
+                            <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">{d.course_name}</p>
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              <span className={cn('text-xs px-1.5 py-0.5 rounded', DEADLINE_TYPE_STYLES[d.type])}>{DEADLINE_TYPE_LABELS[d.type]}</span>
+                              {d.weight != null && <span className="text-xs text-gray-400 dark:text-zinc-500">{d.weight}%</span>}
+                              {isPast && (
+                                <span className="text-xs text-red-500 animate-overdue font-medium">Overdue</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-6 shadow-sm">
-              <p className="text-sm text-gray-400 dark:text-zinc-500 text-center mb-6">Click a day to see deadlines</p>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-3">Types</p>
-                {(['exam', 'quiz', 'assignment', 'project', 'other'] as const).map(t => (
-                  <div key={t} className="flex items-center gap-2">
-                    <div className={cn('w-2 h-2 rounded-full', DEADLINE_TYPE_DOT[t])} />
-                    <span className="text-xs text-gray-500 dark:text-zinc-400">{DEADLINE_TYPE_LABELS[t]}</span>
+                      </motion.li>
+                    )
+                  })}
+                </ul>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="legend"
+                initial={{ x: 24, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -16, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-6 shadow-sm"
+              >
+                {loading ? (
+                  <div className="space-y-2">
+                    {[...Array(5)].map((_, i) => <div key={i} className="h-4 bg-gray-200 dark:bg-zinc-800 rounded animate-pulse" />)}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-400 dark:text-zinc-500 text-center mb-6">Click a day to see deadlines</p>
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-3">Types</p>
+                      {(['exam', 'quiz', 'assignment', 'project', 'other'] as const).map((t, i) => (
+                        <motion.div key={t} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06 }} className="flex items-center gap-2">
+                          <div className={cn('w-2 h-2 rounded-full', DEADLINE_TYPE_DOT[t])} />
+                          <span className="text-xs text-gray-500 dark:text-zinc-400">{DEADLINE_TYPE_LABELS[t]}</span>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
