@@ -111,20 +111,17 @@ export async function POST(request: NextRequest) {
     const pdfData = await pdfParse(fileBuffer)
     syllabusText = pdfData.text
   } catch (err) {
-    await supabase
-      .from('syllabi')
-      .update({ status: 'failed', error_message: 'Failed to parse PDF' })
-      .eq('id', syllabus.id)
+    await supabase.from('syllabi').update({ status: 'failed', error_message: 'Failed to parse PDF' }).eq('id', syllabus.id)
     return NextResponse.json({ error: 'Failed to parse PDF — make sure it is not scanned/image-only' }, { status: 422 })
   }
 
   if (!syllabusText.trim()) {
-    await supabase
-      .from('syllabi')
-      .update({ status: 'failed', error_message: 'PDF has no extractable text' })
-      .eq('id', syllabus.id)
+    await supabase.from('syllabi').update({ status: 'failed', error_message: 'PDF has no extractable text' }).eq('id', syllabus.id)
     return NextResponse.json({ error: 'This PDF has no extractable text (it may be a scanned image)' }, { status: 422 })
   }
+
+  // Store extracted text for AI chat (truncated to 60k chars to stay within DB limits)
+  await supabase.from('syllabi').update({ extracted_text: syllabusText.slice(0, 60000) }).eq('id', syllabus.id)
 
   // Run AI extraction
   let extracted
@@ -132,10 +129,7 @@ export async function POST(request: NextRequest) {
     extracted = await extractDeadlinesFromText(syllabusText)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'AI extraction failed'
-    await supabase
-      .from('syllabi')
-      .update({ status: 'failed', error_message: message })
-      .eq('id', syllabus.id)
+    await supabase.from('syllabi').update({ status: 'failed', error_message: message }).eq('id', syllabus.id)
     return NextResponse.json({ error: `AI extraction failed: ${message}` }, { status: 500 })
   }
 

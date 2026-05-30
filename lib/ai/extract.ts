@@ -3,10 +3,16 @@ import type { ExtractedDeadline, DeadlineType } from '@/types'
 
 const VALID_TYPES: DeadlineType[] = ['assignment', 'quiz', 'exam', 'project', 'other']
 
-// Primary model — reliable free model for structured JSON output
-const PRIMARY_MODEL = process.env.OPENROUTER_MODEL ?? 'meta-llama/llama-3.3-70b-instruct:free'
-// Fallback if primary fails
-const FALLBACK_MODEL = 'google/gemma-3-27b-it:free'
+// Model priority: try in order until one succeeds
+function getModels(): string[] {
+  const custom = process.env.OPENROUTER_MODEL
+  const defaults = [
+    'google/gemini-2.0-flash-exp:free',
+    'google/gemma-3-27b-it:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+  ]
+  return custom ? [custom, ...defaults.filter(m => m !== custom)] : defaults
+}
 
 function getClient() {
   return new OpenAI({
@@ -19,35 +25,39 @@ function getClient() {
   })
 }
 
-function buildPrompt(syllabusText: string): string {
-  const currentYear = new Date().getFullYear()
-  return `Extract every graded deadline from this university syllabus. Include assignments, quizzes, midterms, finals, projects, labs, presentations.
+function buildPrompt(text: string): string {
+  const year = new Date().getFullYear()
+  return `Extract every graded deadline from this university course syllabus.
 
-Return ONLY a raw JSON array (no markdown fences, no explanation). Each object must have:
-- "title": concise name (e.g. "Midterm Exam", "Assignment 3")
-- "type": exactly one of: "assignment", "quiz", "exam", "project", "other"
-- "due_date": YYYY-MM-DD format. Use ${currentYear} if no year given. Estimate from week/month if needed.
-- "description": brief string or null
-- "weight": number (percentage of final grade, e.g. 15) or null
-
-If no deadlines exist, return [].
-
-Syllabus text:
-${syllabusText.slice(0, 40000)}`
+Return ONLY a raw JSON array — no markdown, no explanation. Each item:
+{
+  "title": "concise name",
+  "type": "assignment" | "quiz" | "exam" | "project" | "other",
+  "due_date": "YYYY-MM-DD",
+  "description": "brief description or null",
+  "weight": number_or_null
 }
 
-function parseJson(text: string): ExtractedDeadline[] {
-  // Strip markdown fences if present
-  let cleaned = text.trim()
-  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '')
-  cleaned = cleaned.trim()
+Rules:
+- Use ${year} if no year given
+- Estimate date from week/month references
+- weight = percentage of final grade (e.g. 20 for 20%)
+- Include assignments, quizzes, midterms, finals, projects, labs, presentations
+- If no deadlines found, return []
 
-  // Find the JSON array
-  const start = cleaned.indexOf('[')
-  const end = cleaned.lastIndexOf(']')
+Syllabus:
+${text.slice(0, 45000)}`
+}
+
+function parseDeadlines(text: string): ExtractedDeadline[] {
+  let s = text.trim()
+  // Strip markdown fences
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+  const start = s.indexOf('[')
+  const end = s.lastIndexOf(']')
   if (start === -1 || end === -1) return []
 
-  const raw = JSON.parse(cleaned.slice(start, end + 1)) as ExtractedDeadline[]
+  const raw = JSON.parse(s.slice(start, end + 1)) as ExtractedDeadline[]
   return raw
     .filter(d => d.title && d.due_date && /^\d{4}-\d{2}-\d{2}$/.test(d.due_date))
     .map(d => ({
@@ -59,28 +69,30 @@ function parseJson(text: string): ExtractedDeadline[] {
     }))
 }
 
-async function tryExtract(client: OpenAI, model: string, syllabusText: string): Promise<ExtractedDeadline[]> {
-  const completion = await client.chat.completions.create({
-    model,
-    max_tokens: 4096,
-    temperature: 0.1,
-    messages: [{ role: 'user', content: buildPrompt(syllabusText) }],
-  })
-  const text = completion.choices[0]?.message?.content ?? ''
-  return parseJson(text)
-}
-
 export async function extractDeadlinesFromText(syllabusText: string): Promise<ExtractedDeadline[]> {
   const client = getClient()
+  const models = getModels()
+  const prompt = buildPrompt(syllabusText)
+  let lastError: unknown
 
-  try {
-    return await tryExtract(client, PRIMARY_MODEL, syllabusText)
-  } catch (primaryErr) {
-    console.warn(`Primary model (${PRIMARY_MODEL}) failed, trying fallback:`, primaryErr)
+  for (const model of models) {
     try {
-      return await tryExtract(client, FALLBACK_MODEL, syllabusText)
-    } catch (fallbackErr) {
-      throw new Error(`AI extraction failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`)
+      console.log(`[AI] Trying model: ${model}`)
+      const completion = await client.chat.completions.create({
+        model,
+        max_tokens: 4096,
+        temperature: 0.1,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      const text = completion.choices[0]?.message?.content ?? ''
+      const results = parseDeadlines(text)
+      console.log(`[AI] ${model} succeeded, extracted ${results.length} deadlines`)
+      return results
+    } catch (err) {
+      console.warn(`[AI] ${model} failed:`, err instanceof Error ? err.message : err)
+      lastError = err
     }
   }
+
+  throw new Error(`All AI models failed. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`)
 }
