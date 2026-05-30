@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { BookOpen, Brain, Calendar, GraduationCap, LayoutDashboard, LogOut, TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -16,23 +17,22 @@ const nav = [
 
 export function Sidebar({ userEmail }: { userEmail?: string }) {
   const pathname = usePathname()
-  const router = useRouter()
-  const supabase = createClient()
 
   async function handleSignOut() {
+    const supabase = createClient()
     await supabase.auth.signOut()
     window.location.href = '/'
   }
 
   return (
-    <aside className="w-56 shrink-0 flex flex-col h-screen sticky top-0 border-r border-zinc-900 bg-zinc-950">
+    <aside className="w-56 shrink-0 flex flex-col h-screen sticky top-0 border-r border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-zinc-900">
+      <div className="px-5 py-5 border-b border-gray-200 dark:border-zinc-800">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
             <BookOpen className="w-3.5 h-3.5 text-white" />
           </div>
-          <span className="font-semibold text-sm tracking-tight">ADA Scholar</span>
+          <span className="font-semibold text-sm tracking-tight text-gray-900 dark:text-zinc-100">ADA Scholar</span>
         </Link>
       </div>
 
@@ -47,11 +47,11 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
               className={cn(
                 'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 active
-                  ? 'bg-zinc-900 text-zinc-100'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60'
+                  ? 'bg-indigo-50 dark:bg-zinc-900 text-indigo-700 dark:text-zinc-100'
+                  : 'text-gray-500 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-900/60'
               )}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <Icon className={cn('w-4 h-4 shrink-0', active && 'text-indigo-600 dark:text-indigo-400')} />
               {label}
             </Link>
           )
@@ -59,13 +59,14 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
       </nav>
 
       {/* User */}
-      <div className="p-3 border-t border-zinc-900">
-        <div className="px-3 py-2 mb-0.5">
-          <p className="text-xs text-zinc-500 truncate">{userEmail}</p>
+      <div className="p-3 border-t border-gray-200 dark:border-zinc-800 space-y-0.5">
+        <ThemeToggle />
+        <div className="px-3 py-1.5">
+          <p className="text-xs text-gray-400 dark:text-zinc-500 truncate">{userEmail}</p>
         </div>
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60 transition-colors"
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
         >
           <LogOut className="w-4 h-4 shrink-0" />
           Sign out
