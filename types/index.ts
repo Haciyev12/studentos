@@ -52,6 +52,8 @@ export interface Deadline {
   priority: Priority
   completed: boolean
   manually_edited: boolean
+  score?: number | null
+  score_updated_at?: string | null
   created_at: string
   updated_at: string
   course?: Course

@@ -10,6 +10,7 @@ const updateSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   weight: z.number().min(0).max(100).nullable().optional(),
   completed: z.boolean().optional(),
+  score: z.number().min(0).max(100).nullable().optional(),
 })
 
 function getSupabase() {
@@ -37,9 +38,17 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const result = updateSchema.safeParse(body)
   if (!result.success) return NextResponse.json({ error: result.error.flatten() }, { status: 400 })
 
+  const now = new Date().toISOString()
+  const updatePayload: Record<string, unknown> = {
+    ...result.data,
+    manually_edited: true,
+    updated_at: now,
+  }
+  if ('score' in result.data) updatePayload.score_updated_at = now
+
   const { data, error } = await supabase
     .from('deadlines')
-    .update({ ...result.data, manually_edited: true, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq('id', params.id)
     .eq('user_id', user.id)
     .select()

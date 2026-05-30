@@ -7,6 +7,8 @@ import { extractDeadlinesFromText } from '@/lib/ai/extract'
 // Importing the internal module avoids a test-file-read bug in the default export.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse/lib/pdf-parse.js')
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const mammoth = require('mammoth')
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -52,8 +54,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing file or course_id' }, { status: 400 })
   }
 
-  if (!file.type.includes('pdf')) {
-    return NextResponse.json({ error: 'File must be a PDF' }, { status: 400 })
+  const isPDF = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf')
+  const isDOCX = file.type.includes('wordprocessingml') || file.name.toLowerCase().endsWith('.docx')
+
+  if (!isPDF && !isDOCX) {
+    return NextResponse.json({ error: 'File must be a PDF or DOCX' }, { status: 400 })
   }
 
   if (file.size > 20 * 1024 * 1024) {
@@ -76,10 +81,14 @@ export async function POST(request: NextRequest) {
   const fileBuffer = Buffer.from(await file.arrayBuffer())
   const filePath = `${user.id}/${courseId}/${Date.now()}_${file.name.replace(/[^a-z0-9._-]/gi, '_')}`
 
+  const contentType = isPDF
+    ? 'application/pdf'
+    : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
   const { error: uploadError } = await supabase.storage
     .from('syllabi')
     .upload(filePath, fileBuffer, {
-      contentType: 'application/pdf',
+      contentType,
       upsert: false,
     })
 
@@ -105,19 +114,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create syllabus record' }, { status: 500 })
   }
 
-  // Parse PDF and extract text
+  // Extract text from file
   let syllabusText: string
   try {
-    const pdfData = await pdfParse(fileBuffer)
-    syllabusText = pdfData.text
+    if (isPDF) {
+      const pdfData = await pdfParse(fileBuffer)
+      syllabusText = pdfData.text
+    } else {
+      const result = await mammoth.extractRawText({ buffer: fileBuffer })
+      syllabusText = result.value
+    }
   } catch (err) {
-    await supabase.from('syllabi').update({ status: 'failed', error_message: 'Failed to parse PDF' }).eq('id', syllabus.id)
-    return NextResponse.json({ error: 'Failed to parse PDF — make sure it is not scanned/image-only' }, { status: 422 })
+    const label = isPDF ? 'PDF' : 'DOCX'
+    await supabase.from('syllabi').update({ status: 'failed', error_message: `Failed to parse ${label}` }).eq('id', syllabus.id)
+    return NextResponse.json({ error: `Failed to parse ${label} — the file may be corrupted` }, { status: 422 })
   }
 
   if (!syllabusText.trim()) {
-    await supabase.from('syllabi').update({ status: 'failed', error_message: 'PDF has no extractable text' }).eq('id', syllabus.id)
-    return NextResponse.json({ error: 'This PDF has no extractable text (it may be a scanned image)' }, { status: 422 })
+    const label = isPDF ? 'PDF' : 'DOCX'
+    await supabase.from('syllabi').update({ status: 'failed', error_message: `${label} has no extractable text` }).eq('id', syllabus.id)
+    return NextResponse.json({ error: `This ${label} has no extractable text` }, { status: 422 })
   }
 
   // Store extracted text for AI chat (truncated to 60k chars to stay within DB limits)

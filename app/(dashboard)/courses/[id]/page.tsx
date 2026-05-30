@@ -6,12 +6,12 @@ import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   AlertCircle, ArrowLeft, Bot, CalendarDays, Check, CheckCircle2,
-  Edit2, FileText, Loader2, MessageSquare, Plus, Send, Sparkles, Trash2, Upload, Users, X,
+  Edit2, FileText, Loader2, MessageSquare, Plus, Send, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Upload, Users, X,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { DEADLINE_TYPE_LABELS, DEADLINE_TYPE_STYLES, type Course, type Deadline, type DeadlineType, type Syllabus } from '@/types'
+import { DEADLINE_TYPE_LABELS, DEADLINE_TYPE_STYLES, GRADE_POINTS, scoreToGrade, type Course, type Deadline, type DeadlineType, type Syllabus } from '@/types'
 import { cn, formatRelativeDate } from '@/lib/utils'
 
 const DEADLINE_TYPES: DeadlineType[] = ['assignment', 'quiz', 'exam', 'project', 'other']
@@ -32,7 +32,7 @@ export default function CourseDetailPage() {
   const [dragOver, setDragOver] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
-  const [activeTab, setActiveTab] = useState<'deadlines' | 'chat' | 'groups'>('deadlines')
+  const [activeTab, setActiveTab] = useState<'deadlines' | 'chat' | 'groups' | 'predictor'>('deadlines')
 
   // Groups tab state
   type GroupSummary = { id: string; name: string; course_name: string | null; description: string | null; invite_code: string; member_count: number; is_member: boolean }
@@ -101,7 +101,9 @@ export default function CourseDetailPage() {
   }
 
   async function handleUpload(file: File) {
-    if (!file.type.includes('pdf')) { toast.error('Please upload a PDF file'); return }
+    const isPDF = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf')
+    const isDOCX = file.type.includes('wordprocessingml') || file.name.toLowerCase().endsWith('.docx')
+    if (!isPDF && !isDOCX) { toast.error('Please upload a PDF or DOCX file'); return }
     if (file.size > 20 * 1024 * 1024) { toast.error('File must be under 20 MB'); return }
 
     setUploading(true)
@@ -210,7 +212,7 @@ export default function CourseDetailPage() {
           onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleUpload(f) }}
           onClick={() => !uploading && fileInputRef.current?.click()}
         >
-          <input ref={fileInputRef} type="file" accept=".pdf" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = '' }} style={{ display: 'none' }} />
+          <input ref={fileInputRef} type="file" accept=".pdf,.docx" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = '' }} style={{ display: 'none' }} />
           <AnimatePresence mode="wait">
             {uploading ? (
               <motion.div key="uploading" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-3">
@@ -229,8 +231,8 @@ export default function CourseDetailPage() {
                 <motion.div whileHover={{ scale: 1.05 }} className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center mb-1">
                   <Upload className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
                 </motion.div>
-                <p className="text-sm font-medium text-gray-700 dark:text-zinc-300">Drop your syllabus PDF here</p>
-                <p className="text-xs text-gray-400 dark:text-zinc-500">or click to browse · max 20 MB</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-zinc-300">Drop your syllabus here</p>
+                <p className="text-xs text-gray-400 dark:text-zinc-500">PDF or DOCX · max 20 MB</p>
                 {hasSyllabus && (
                   <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1 rounded-full">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Syllabus uploaded — upload again to update
@@ -283,6 +285,7 @@ export default function CourseDetailPage() {
         <div className="flex items-center gap-1 p-1 rounded-xl bg-gray-100 dark:bg-zinc-800 mb-6 w-fit">
           {[
             { key: 'deadlines', label: `Deadlines (${deadlines.length})`, icon: CalendarDays },
+            { key: 'predictor', label: 'Grade Predictor', icon: TrendingUp },
             { key: 'chat', label: 'AI Chat', icon: Bot },
             { key: 'groups', label: 'Groups', icon: Users },
           ].map(({ key, label, icon: Icon }) => (
@@ -347,6 +350,10 @@ export default function CourseDetailPage() {
                   </ul>
                 </div>
               )}
+            </motion.div>
+          ) : activeTab === 'predictor' ? (
+            <motion.div key="predictor" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }}>
+              <GradePredictor deadlines={deadlines} course={course} onRefresh={fetchAll} />
             </motion.div>
           ) : activeTab === 'groups' ? (
             <motion.div key="groups" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}>
@@ -624,4 +631,288 @@ function SyllabusBadge({ status }: { status: string }) {
   }
   const { cls, label } = map[status] ?? map.pending
   return <span className={`text-xs px-2 py-0.5 rounded-lg border ${cls} shrink-0`}>{label}</span>
+}
+
+// ─── Grade Predictor ──────────────────────────────────────────────────────────
+
+const TARGET_GRADES = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D'] as const
+const TARGET_MINIMUMS: Record<string, number> = {
+  A: 94, 'A-': 90, 'B+': 87, B: 83, 'B-': 80,
+  'C+': 77, C: 73, 'C-': 70, 'D+': 67, D: 60,
+}
+const SCENARIO_KEYS = ['pessimistic', 'realistic', 'optimistic'] as const
+type Scenario = typeof SCENARIO_KEYS[number]
+const SCENARIO_LABELS: Record<Scenario, string> = { pessimistic: 'Pessimistic', realistic: 'Realistic', optimistic: 'Optimistic' }
+const SCENARIO_ASSUMED: Record<Scenario, number> = { pessimistic: 60, realistic: 75, optimistic: 90 }
+
+function gradeColor(letter: string): string {
+  if (letter.startsWith('A')) return 'text-emerald-500 dark:text-emerald-400'
+  if (letter.startsWith('B')) return 'text-blue-500 dark:text-blue-400'
+  if (letter.startsWith('C')) return 'text-amber-500 dark:text-amber-400'
+  if (letter.startsWith('D')) return 'text-orange-500 dark:text-orange-400'
+  return 'text-red-500 dark:text-red-400'
+}
+
+function GradePredictor({ deadlines, course, onRefresh }: { deadlines: Deadline[]; course: Course; onRefresh: () => void }) {
+  const [scores, setScores] = useState<Record<string, string>>({})
+  const [targetGrade, setTargetGrade] = useState('B+')
+  const [activeScenario, setActiveScenario] = useState<Scenario>('realistic')
+  const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  useEffect(() => {
+    const initial: Record<string, string> = {}
+    for (const d of deadlines) {
+      if (d.score != null) initial[d.id] = d.score.toString()
+    }
+    setScores(initial)
+  }, [deadlines])
+
+  const weightedItems = deadlines.filter(d => d.weight != null && d.weight > 0)
+  const totalWeight = weightedItems.reduce((sum, d) => sum + (d.weight ?? 0), 0)
+  const scoredItems = weightedItems.filter(d => (scores[d.id] ?? '') !== '')
+  const scoredWeightedSum = scoredItems.reduce((sum, d) => {
+    const s = parseFloat(scores[d.id])
+    return sum + (isNaN(s) ? 0 : s * (d.weight ?? 0))
+  }, 0)
+  const scoredWeight = scoredItems.reduce((sum, d) => sum + (d.weight ?? 0), 0)
+  const remainingWeight = totalWeight - scoredWeight
+  const currentScore = scoredWeight > 0 ? scoredWeightedSum / scoredWeight : null
+  const currentLetter = currentScore != null ? scoreToGrade(currentScore) : null
+
+  function projectedFinal(assumed: number) {
+    if (totalWeight === 0) return 0
+    return (scoredWeightedSum + assumed * remainingWeight) / totalWeight
+  }
+
+  function neededScore() {
+    if (remainingWeight === 0) return null
+    return (TARGET_MINIMUMS[targetGrade] * totalWeight - scoredWeightedSum) / remainingWeight
+  }
+
+  function handleScoreChange(deadlineId: string, value: string) {
+    const num = parseFloat(value)
+    const clamped = value === '' ? '' : isNaN(num) ? '' : String(Math.min(100, Math.max(0, num)))
+    setScores(prev => ({ ...prev, [deadlineId]: clamped }))
+    if (debounceRef.current[deadlineId]) clearTimeout(debounceRef.current[deadlineId])
+    debounceRef.current[deadlineId] = setTimeout(() => {
+      fetch(`/api/deadlines/${deadlineId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ score: clamped === '' ? null : parseFloat(clamped) }),
+      }).then(() => onRefresh())
+    }, 800)
+  }
+
+  const needed = neededScore()
+  const isAlreadyAchieved = needed != null && needed <= 0
+  const isAchievable = needed != null && needed <= 100
+
+  return (
+    <div className="space-y-5">
+      {/* Assessment Table */}
+      <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-zinc-800 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Assessment Scores</h3>
+            <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">Enter your scores to predict your final grade</p>
+          </div>
+          {totalWeight > 0 && (
+            <span className="text-xs text-gray-400 dark:text-zinc-500">{totalWeight}% of grade tracked</span>
+          )}
+        </div>
+
+        {weightedItems.length === 0 ? (
+          <div className="px-5 py-12 text-center">
+            <Target className="w-8 h-8 text-gray-300 dark:text-zinc-700 mx-auto mb-2" />
+            <p className="text-sm text-gray-400 dark:text-zinc-500">No weighted assessments yet</p>
+            <p className="text-xs text-gray-400 dark:text-zinc-600 mt-1">Upload a syllabus or add deadlines with grade weights to use the predictor</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] text-xs font-medium text-gray-400 dark:text-zinc-500 uppercase tracking-wider px-5 py-3 border-b border-gray-100 dark:border-zinc-800 gap-3">
+              <span>Assessment</span>
+              <span className="w-20 text-center">Type</span>
+              <span className="w-14 text-right">Weight</span>
+              <span className="w-24 text-center">Score</span>
+              <span className="w-20 text-right">Contribution</span>
+            </div>
+            <ul className="divide-y divide-gray-100 dark:divide-zinc-800/60">
+              {weightedItems.map((d, i) => {
+                const scoreStr = scores[d.id] ?? ''
+                const scoreNum = scoreStr === '' ? null : parseFloat(scoreStr)
+                const contribution = scoreNum != null && !isNaN(scoreNum) && d.weight != null
+                  ? (scoreNum * d.weight / 100).toFixed(1)
+                  : null
+                return (
+                  <motion.li key={d.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
+                    className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-900 dark:text-zinc-100 truncate">{d.title}</p>
+                      <p className="text-xs text-gray-400 dark:text-zinc-600 mt-0.5">
+                        {format(new Date(d.due_date + 'T00:00:00'), 'MMM d')}
+                      </p>
+                    </div>
+                    <div className="w-20 flex justify-center">
+                      <span className={cn('text-xs px-2 py-0.5 rounded-md', DEADLINE_TYPE_STYLES[d.type])}>
+                        {DEADLINE_TYPE_LABELS[d.type]}
+                      </span>
+                    </div>
+                    <div className="w-14 text-right">
+                      <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">{d.weight}%</span>
+                    </div>
+                    <div className="w-24 flex justify-center">
+                      <input
+                        type="number" min={0} max={100} step={0.5}
+                        value={scoreStr}
+                        onChange={e => handleScoreChange(d.id, e.target.value)}
+                        placeholder="—"
+                        className={cn(
+                          'w-20 text-center bg-gray-50 dark:bg-zinc-800 border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors',
+                          scoreStr !== ''
+                            ? 'border-indigo-200 dark:border-indigo-500/30 text-gray-900 dark:text-zinc-100'
+                            : 'border-gray-200 dark:border-zinc-700 text-gray-400 dark:text-zinc-500'
+                        )}
+                      />
+                    </div>
+                    <div className="w-20 text-right">
+                      {contribution != null
+                        ? <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">+{contribution}</span>
+                        : <span className="text-sm text-gray-300 dark:text-zinc-700">—</span>}
+                    </div>
+                  </motion.li>
+                )
+              })}
+            </ul>
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3 px-5 py-3 bg-gray-50 dark:bg-zinc-800/50 border-t border-gray-100 dark:border-zinc-800">
+              <span className="text-xs text-gray-400 dark:text-zinc-500">{scoredItems.length}/{weightedItems.length} scored</span>
+              <span className="w-20" />
+              <span className="w-14 text-right text-xs font-semibold text-gray-500 dark:text-zinc-400">{totalWeight}%</span>
+              <div className="w-24 text-center">
+                {currentScore != null
+                  ? <span className={cn('text-sm font-bold', gradeColor(currentLetter ?? 'F'))}>{currentScore.toFixed(1)}</span>
+                  : <span className="text-xs text-gray-300 dark:text-zinc-700">—</span>}
+              </div>
+              <div className="w-20 text-right">
+                {scoredWeightedSum > 0
+                  ? <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{(scoredWeightedSum / 100).toFixed(1)}</span>
+                  : <span className="text-xs text-gray-300 dark:text-zinc-700">—</span>}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {weightedItems.length > 0 && (
+        <>
+          {/* Summary + Target Grid */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Current Grade Card */}
+            <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-5 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-zinc-500 mb-3">Current Grade</p>
+              {currentScore != null ? (
+                <>
+                  <div className="flex items-end gap-3">
+                    <span className={cn('text-4xl font-bold', gradeColor(currentLetter ?? 'F'))}>
+                      {currentLetter}
+                    </span>
+                    <div className="mb-0.5">
+                      <span className="text-xl font-semibold text-gray-700 dark:text-zinc-200">{currentScore.toFixed(1)}%</span>
+                      <p className="text-xs text-gray-400 dark:text-zinc-500">based on {scoredWeight}% of grade</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${currentScore}%` }}
+                      transition={{ duration: 0.6, ease: 'easeOut' }}
+                      className={cn('h-full rounded-full', currentScore >= 90 ? 'bg-emerald-500' : currentScore >= 80 ? 'bg-blue-500' : currentScore >= 70 ? 'bg-amber-500' : 'bg-red-500')}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3 py-2">
+                  <span className="text-3xl font-bold text-gray-200 dark:text-zinc-700">—</span>
+                  <p className="text-xs text-gray-400 dark:text-zinc-500">Enter scores to see your grade</p>
+                </div>
+              )}
+            </div>
+
+            {/* Target Grade Calculator */}
+            <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-5 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-zinc-500 mb-3">Target Grade</p>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm text-gray-500 dark:text-zinc-400">I want</span>
+                <select value={targetGrade} onChange={e => setTargetGrade(e.target.value)}
+                  className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg px-2 py-1 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:border-indigo-500">
+                  {TARGET_GRADES.map(g => <option key={g} value={g}>{g} (≥{TARGET_MINIMUMS[g]}%)</option>)}
+                </select>
+              </div>
+              <AnimatePresence mode="wait">
+                {needed == null ? (
+                  <motion.p key="no-data" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    className="text-xs text-gray-400 dark:text-zinc-500">
+                    {remainingWeight === 0 ? 'All items scored!' : 'Enter some scores first'}
+                  </motion.p>
+                ) : isAlreadyAchieved ? (
+                  <motion.div key="achieved" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
+                    <TrendingUp className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <p className="text-sm text-emerald-700 dark:text-emerald-300">Already achieved <strong>{targetGrade}</strong>!</p>
+                  </motion.div>
+                ) : isAchievable ? (
+                  <motion.div key="achievable" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                    className="px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/10">
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      Need <strong>{needed.toFixed(1)}%</strong> on remaining {remainingWeight}%
+                    </p>
+                    <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">to reach <strong>{targetGrade}</strong></p>
+                  </motion.div>
+                ) : (
+                  <motion.div key="not-achievable" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-500/10">
+                    <TrendingDown className="w-4 h-4 text-red-500 shrink-0" />
+                    <p className="text-sm text-red-700 dark:text-red-300">
+                      <strong>{targetGrade}</strong> not achievable (needs {needed.toFixed(0)}%)
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Scenario Comparison */}
+          {remainingWeight > 0 && (
+            <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Scenario Comparison</h3>
+                <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">Projected final grade based on remaining {remainingWeight}% of assessments</p>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-zinc-800">
+                {SCENARIO_KEYS.map(key => {
+                  const projected = projectedFinal(SCENARIO_ASSUMED[key])
+                  const letter = scoreToGrade(projected)
+                  const gpa = GRADE_POINTS[letter] ?? 0
+                  return (
+                    <motion.button key={key} onClick={() => setActiveScenario(key)}
+                      className={cn('relative px-5 py-5 text-center transition-colors', activeScenario === key ? 'bg-indigo-50/60 dark:bg-indigo-500/5' : 'hover:bg-gray-50 dark:hover:bg-zinc-800/40')}
+                    >
+                      {activeScenario === key && (
+                        <motion.div layoutId="scenario-underline" className="absolute inset-x-0 bottom-0 h-0.5 bg-indigo-500" />
+                      )}
+                      <p className="text-xs font-semibold text-gray-400 dark:text-zinc-500 mb-0.5">{SCENARIO_LABELS[key]}</p>
+                      <p className="text-xs text-gray-300 dark:text-zinc-700 mb-2">avg {SCENARIO_ASSUMED[key]}% remaining</p>
+                      <p className={cn('text-3xl font-bold mb-0.5', gradeColor(letter))}>{letter}</p>
+                      <p className="text-base font-semibold text-gray-600 dark:text-zinc-300">{projected.toFixed(1)}%</p>
+                      <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">{gpa.toFixed(2)} GPA pts · {course.credits} cr</p>
+                    </motion.button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
 }
