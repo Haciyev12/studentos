@@ -56,9 +56,9 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
   const displayName = profile.display_name || userEmail?.split('@')[0] || 'Account'
 
   return (
-    <aside className="w-56 shrink-0 flex flex-col h-screen sticky top-0 bg-[#0b0c14] border-r border-white/[0.06]">
+    <aside className="w-56 shrink-0 flex flex-col h-screen sticky top-0 bg-[#080910] border-r border-indigo-500/20 shadow-[1px_0_0_rgba(99,102,241,0.08)]">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-white/[0.06]">
+      <div className="px-5 py-5 border-b border-white/[0.07]">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div className="w-7 h-7 bg-indigo-500 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/30">
             <BookOpen className="w-3.5 h-3.5 text-white" />
@@ -124,7 +124,7 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
       </nav>
 
       {/* Bottom section */}
-      <div className="shrink-0 p-3 border-t border-white/[0.06] space-y-1">
+      <div className="shrink-0 p-3 border-t border-white/[0.07] space-y-1">
         {/* User card */}
         <Link
           href="/account"

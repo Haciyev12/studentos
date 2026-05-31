@@ -48,7 +48,27 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const { error } = await supabase.from('course_groups').update(updates).eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ ok: true })
+  // When a course is linked, sync all existing deadlines for that course into the group
+  const newCourseId = updates.course_id as string | null
+  if (newCourseId) {
+    const { data: deadlines } = await supabase
+      .from('deadlines')
+      .select('id')
+      .eq('course_id', newCourseId)
+      .eq('user_id', user.id)
+
+    if (deadlines && deadlines.length > 0) {
+      const rows = deadlines.map((d: { id: string }) => ({
+        group_id: params.id,
+        deadline_id: d.id,
+        added_by: user.id,
+      }))
+      // Ignore duplicates silently
+      await supabase.from('group_deadlines').upsert(rows, { onConflict: 'group_id,deadline_id', ignoreDuplicates: true })
+    }
+  }
+
+  return NextResponse.json({ ok: true, synced: newCourseId ? true : false })
 }
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
