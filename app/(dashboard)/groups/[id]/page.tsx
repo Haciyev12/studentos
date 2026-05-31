@@ -861,10 +861,10 @@ function QuizTab({ groupId, myUserId }: { groupId: string; myUserId: string }) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setUploadingPhoto(null); return }
     const ext = file.name.split('.').pop() ?? 'jpg'
-    const filePath = `quiz-images/${user.id}/${Date.now()}.${ext}`
+    const filePath = `${user.id}/${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('quiz-images').upload(filePath, file, { contentType: file.type })
     if (error) {
-      alert('Photo upload failed. Please create a "quiz-images" public bucket in Supabase Storage first.')
+      alert(`Upload failed: ${error.message}`)
       setUploadingPhoto(null)
       return
     }
