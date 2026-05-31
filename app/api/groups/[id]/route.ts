@@ -19,6 +19,38 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   return NextResponse.json({ group, members: members ?? [] })
 }
 
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json()
+
+  // Only admin can update group settings
+  const { data: membership } = await supabase
+    .from('group_members')
+    .select('role')
+    .eq('group_id', params.id)
+    .eq('user_id', user.id)
+    .single()
+
+  if (!membership || membership.role !== 'admin') {
+    return NextResponse.json({ error: 'Only admins can edit group settings' }, { status: 403 })
+  }
+
+  const updates: Record<string, unknown> = {}
+  if ('course_id' in body) updates.course_id = body.course_id ?? null
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+  }
+
+  const { error } = await supabase.from('course_groups').update(updates).eq('id', params.id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ ok: true })
+}
+
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()

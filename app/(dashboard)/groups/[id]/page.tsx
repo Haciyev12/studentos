@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, MessageSquare, CheckSquare, FileText, Trophy, Target, Send, Pin, Bell, Plus, Check, Trash2, ChevronDown, Loader2, Users, Hash, Copy, CheckCheck, AlertCircle, PartyPopper, X, Linkedin, GraduationCap, ImagePlus } from 'lucide-react'
+import { ArrowLeft, MessageSquare, CheckSquare, FileText, Trophy, Target, Send, Pin, Bell, Plus, Check, Trash2, ChevronDown, Loader2, Users, Hash, Copy, CheckCheck, AlertCircle, PartyPopper, X, Linkedin, GraduationCap, ImagePlus, LogOut, Link2 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
@@ -33,24 +33,35 @@ function Avatar({ emoji, name, size = 'sm' }: { emoji?: string; name?: string; s
   )
 }
 
+type Course = { id: string; name: string; code?: string }
+
 export default function GroupPage({ params }: { params: { id: string } }) {
   const [tab, setTab] = useState<Tab>('chat')
-  const [group, setGroup] = useState<{ id: string; name: string; course_name?: string; section?: string; invite_code: string } | null>(null)
+  const [group, setGroup] = useState<{ id: string; name: string; course_name?: string; section?: string; invite_code: string; course_id?: string | null } | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [myUserId, setMyUserId] = useState('')
+  const [myRole, setMyRole] = useState<string>('')
   const [codeCopied, setCodeCopied] = useState(false)
   const [showMembers, setShowMembers] = useState(true)
   const [profileUserId, setProfileUserId] = useState<string | null>(null)
+  const [leavingGroup, setLeavingGroup] = useState(false)
+  const [showLinkCourse, setShowLinkCourse] = useState(false)
+  const [courses, setCourses] = useState<Course[]>([])
+  const [linkingCourse, setLinkingCourse] = useState(false)
+  const [selectedCourseId, setSelectedCourseId] = useState('')
 
   useEffect(() => {
     loadGroup()
-    getMyId()
+    loadMyId()
   }, [params.id])
 
-  async function getMyId() {
+  async function loadMyId() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) setMyUserId(user.id)
+    if (!user) return
+    setMyUserId(user.id)
+    const { data } = await supabase.from('courses').select('id, name, code').eq('user_id', user.id).order('name')
+    if (data) setCourses(data)
   }
 
   async function loadGroup() {
@@ -61,6 +72,13 @@ export default function GroupPage({ params }: { params: { id: string } }) {
     setMembers(d.members)
   }
 
+  useEffect(() => {
+    if (myUserId && members.length > 0) {
+      const me = members.find(m => m.user_id === myUserId)
+      if (me) setMyRole(me.role)
+    }
+  }, [myUserId, members])
+
   function copyCode() {
     if (!group) return
     navigator.clipboard.writeText(group.invite_code)
@@ -68,11 +86,32 @@ export default function GroupPage({ params }: { params: { id: string } }) {
     setTimeout(() => setCodeCopied(false), 2000)
   }
 
+  async function handleLeave() {
+    if (!confirm('Leave this group?')) return
+    setLeavingGroup(true)
+    await fetch(`/api/groups/${params.id}`, { method: 'DELETE' })
+    window.location.href = '/groups'
+  }
+
+  async function handleLinkCourse() {
+    setLinkingCourse(true)
+    await fetch(`/api/groups/${params.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ course_id: selectedCourseId || null }),
+    })
+    await loadGroup()
+    setShowLinkCourse(false)
+    setLinkingCourse(false)
+  }
+
   if (!group) return (
     <div className="flex items-center justify-center h-full">
       <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
     </div>
   )
+
+  const linkedCourse = courses.find(c => c.id === group.course_id)
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -87,10 +126,21 @@ export default function GroupPage({ params }: { params: { id: string } }) {
           </div>
           <div>
             <h1 className="font-semibold text-gray-900 dark:text-zinc-100 text-sm leading-tight">{group.name}</h1>
-            {group.course_name && <p className="text-xs text-gray-500 dark:text-zinc-400">{group.course_name}{group.section ? ` · ${group.section}` : ''}</p>}
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              {linkedCourse ? linkedCourse.name : group.course_name || ''}
+              {group.section ? ` · ${group.section}` : ''}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {myRole === 'admin' && (
+            <button onClick={() => { setShowLinkCourse(p => !p); setSelectedCourseId(group.course_id ?? '') }}
+              className={`flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg transition-colors ${group.course_id ? 'text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20' : 'text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800'}`}
+              title="Link to course">
+              <Link2 className="w-3.5 h-3.5" />
+              {group.course_id ? 'Linked' : 'Link course'}
+            </button>
+          )}
           <button onClick={() => setShowMembers(p => !p)} className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
             <Users className="w-3.5 h-3.5" /> {members.length}
           </button>
@@ -98,8 +148,40 @@ export default function GroupPage({ params }: { params: { id: string } }) {
             {codeCopied ? <CheckCheck className="w-3.5 h-3.5 text-green-500" /> : <Hash className="w-3.5 h-3.5" />}
             {group.invite_code}
           </button>
+          <button onClick={handleLeave} disabled={leavingGroup}
+            className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            title="Leave group">
+            {leavingGroup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+            Leave
+          </button>
         </div>
       </div>
+
+      {/* Link course panel (admin only) */}
+      <AnimatePresence>
+        {showLinkCourse && myRole === 'admin' && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            className="shrink-0 border-b border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 overflow-hidden">
+            <div className="px-6 py-3 flex items-center gap-3">
+              <Link2 className="w-4 h-4 text-indigo-500 shrink-0" />
+              <p className="text-xs text-indigo-700 dark:text-indigo-300 font-medium shrink-0">Link to course:</p>
+              <select value={selectedCourseId} onChange={e => setSelectedCourseId(e.target.value)}
+                className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">— No linked course —</option>
+                {courses.map(c => <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ''}</option>)}
+              </select>
+              <button onClick={handleLinkCourse} disabled={linkingCourse}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-500 disabled:opacity-60 transition-colors flex items-center gap-1.5">
+                {linkingCourse ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Save
+              </button>
+              <button onClick={() => setShowLinkCourse(false)} className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Members panel */}
       <AnimatePresence>

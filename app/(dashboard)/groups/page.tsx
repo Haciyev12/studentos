@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { BookOpen, Plus, Search, Users, X, LogIn, Hash, ChevronRight, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 
 type Group = {
   id: string
@@ -20,6 +21,8 @@ type MembershipRow = {
   course_groups: Group
 }
 
+type Course = { id: string; name: string; code?: string }
+
 export default function GroupsPage() {
   const [memberships, setMemberships] = useState<MembershipRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -28,12 +31,14 @@ export default function GroupsPage() {
   const [searchQ, setSearchQ] = useState('')
   const [searchResults, setSearchResults] = useState<Group[]>([])
   const [searching, setSearching] = useState(false)
+  const [courses, setCourses] = useState<Course[]>([])
 
   // Create form
   const [createName, setCreateName] = useState('')
   const [createCourse, setCreateCourse] = useState('')
   const [createSection, setCreateSection] = useState('')
   const [createDesc, setCreateDesc] = useState('')
+  const [createCourseId, setCreateCourseId] = useState('')
   const [creating, setCreating] = useState(false)
 
   // Join form
@@ -41,7 +46,16 @@ export default function GroupsPage() {
   const [joining, setJoining] = useState(false)
   const [joinMsg, setJoinMsg] = useState('')
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('courses').select('id, name, code').eq('user_id', user.id).order('name').then(({ data }) => {
+        if (data) setCourses(data)
+      })
+    })
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -67,8 +81,9 @@ export default function GroupsPage() {
     e.preventDefault()
     if (!createName.trim()) return
     setCreating(true)
-    const r = await fetch('/api/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: createName, course_name: createCourse, section: createSection, description: createDesc }) })
-    if (r.ok) { await load(); setShowCreate(false); setCreateName(''); setCreateCourse(''); setCreateSection(''); setCreateDesc('') }
+    const selectedCourse = courses.find(c => c.id === createCourseId)
+    const r = await fetch('/api/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: createName, course_name: selectedCourse ? selectedCourse.name : createCourse, section: createSection, description: createDesc, course_id: createCourseId || null }) })
+    if (r.ok) { await load(); setShowCreate(false); setCreateName(''); setCreateCourse(''); setCreateSection(''); setCreateDesc(''); setCreateCourseId('') }
     setCreating(false)
   }
 
@@ -153,10 +168,16 @@ export default function GroupsPage() {
             </div>
             <form onSubmit={handleCreate} className="space-y-3">
               <input value={createName} onChange={e => setCreateName(e.target.value)} required placeholder="Group name *" className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              <div className="grid grid-cols-2 gap-3">
-                <input value={createCourse} onChange={e => setCreateCourse(e.target.value)} placeholder="Course (e.g. CSCI 101)" className="px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                <input value={createSection} onChange={e => setCreateSection(e.target.value)} placeholder="Section (optional)" className="px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
+              {courses.length > 0 ? (
+                <select value={createCourseId} onChange={e => setCreateCourseId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">Link to a course (optional)</option>
+                  {courses.map(c => <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ''}</option>)}
+                </select>
+              ) : (
+                <input value={createCourse} onChange={e => setCreateCourse(e.target.value)} placeholder="Course name (optional)" className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              )}
+              <input value={createSection} onChange={e => setCreateSection(e.target.value)} placeholder="Section (optional)" className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               <textarea value={createDesc} onChange={e => setCreateDesc(e.target.value)} placeholder="Description (optional)" rows={2} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
               <button type="submit" disabled={creating} className="w-full py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Create Group

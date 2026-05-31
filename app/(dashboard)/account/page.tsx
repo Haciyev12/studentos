@@ -61,7 +61,12 @@ export default function AccountPage() {
     const filePath = `${user.id}/${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('avatars').upload(filePath, file, { contentType: file.type, upsert: true })
     if (error) {
-      toast.error('Upload failed: ' + error.message + ' — make sure the "avatars" bucket is created in Supabase Storage')
+      const isNotFound = error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('bucket')
+      toast.error(
+        isNotFound
+          ? 'Bucket not found — create a public bucket named exactly "avatars" in Supabase Storage, then run migration 010.'
+          : `Upload failed: ${error.message}. Make sure migration 010 (avatars policies) has been run in Supabase SQL Editor.`
+      )
       setUploadingPhoto(false)
       return
     }
