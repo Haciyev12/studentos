@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const [syllabi, setSyllabi] = useState<SyllabiRow[]>([])
   const [gpa, setGpa] = useState<number | null>(null)
   const [email, setEmail] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [overdueCount, setOverdueCount] = useState(0)
   const [userCount, setUserCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -43,6 +44,12 @@ export default function DashboardPage() {
 
     setEmail(user.email ?? '')
     const today = new Date().toISOString().split('T')[0]
+
+    const profileRes = await fetch('/api/account')
+    if (profileRes.ok) {
+      const p = await profileRes.json()
+      if (p.display_name) setDisplayName(p.display_name)
+    }
 
     const [{ data: dl }, { data: sy }, { data: grades }, { data: overdue }, { data: uc }] = await Promise.all([
       supabase.from('deadlines').select('id, title, type, due_date, completed, course:courses(name, code, color)').eq('user_id', user.id).eq('completed', false).gte('due_date', today).order('due_date', { ascending: true }).limit(8) as any,
@@ -78,7 +85,7 @@ export default function DashboardPage() {
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-  const name = email.split('@')[0] ?? 'there'
+  const name = displayName || email.split('@')[0] || 'there'
 
   const stats = [
     { icon: Clock, label: 'Upcoming', value: deadlines.length, sub: 'deadlines', color: 'indigo' },

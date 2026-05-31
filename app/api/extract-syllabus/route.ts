@@ -150,6 +150,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Bulk-insert deadlines
+  let insertedDeadlineIds: string[] = []
   if (extracted.length > 0) {
     const rows = extracted.map((d) => ({
       course_id: courseId,
@@ -162,7 +163,10 @@ export async function POST(request: NextRequest) {
       weight: d.weight,
     }))
 
-    const { error: insertError } = await supabase.from('deadlines').insert(rows)
+    const { data: inserted, error: insertError } = await supabase
+      .from('deadlines')
+      .insert(rows)
+      .select('id')
 
     if (insertError) {
       await supabase
@@ -170,6 +174,39 @@ export async function POST(request: NextRequest) {
         .update({ status: 'failed', error_message: insertError.message })
         .eq('id', syllabus.id)
       return NextResponse.json({ error: 'Failed to save deadlines' }, { status: 500 })
+    }
+
+    insertedDeadlineIds = (inserted ?? []).map((r: { id: string }) => r.id)
+
+    // Auto-sync to linked study groups where the user is a member
+    if (insertedDeadlineIds.length > 0) {
+      const { data: linkedGroups } = await supabase
+        .from('course_groups')
+        .select('id')
+        .eq('course_id', courseId)
+
+      if (linkedGroups && linkedGroups.length > 0) {
+        // Filter to groups the user is actually a member of (respects RLS on gd_insert)
+        const { data: memberRows } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('user_id', user.id)
+          .in('group_id', linkedGroups.map((g: { id: string }) => g.id))
+
+        const memberGroupIds = (memberRows ?? []).map((r: { group_id: string }) => r.group_id)
+
+        if (memberGroupIds.length > 0) {
+          const groupDeadlineRows = memberGroupIds.flatMap((gid: string) =>
+            insertedDeadlineIds.map((did) => ({
+              group_id: gid,
+              deadline_id: did,
+              added_by: user.id,
+            }))
+          )
+          // Best-effort insert — ignore errors (e.g. duplicate entries)
+          await supabase.from('group_deadlines').insert(groupDeadlineRows)
+        }
+      }
     }
   }
 
