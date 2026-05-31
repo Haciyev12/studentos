@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, MessageSquare, CheckSquare, FileText, Trophy, Target, Send, Pin, Bell, Plus, Check, Trash2, ChevronDown, Loader2, Users, Hash, Copy, CheckCheck, AlertCircle, PartyPopper, X, Linkedin, GraduationCap } from 'lucide-react'
+import { ArrowLeft, MessageSquare, CheckSquare, FileText, Trophy, Target, Send, Pin, Bell, Plus, Check, Trash2, ChevronDown, Loader2, Users, Hash, Copy, CheckCheck, AlertCircle, PartyPopper, X, Linkedin, GraduationCap, ImagePlus } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
@@ -829,11 +829,13 @@ function NotesTab({ groupId }: { groupId: string }) {
 
 // ─── QUIZ TAB ────────────────────────────────────────────────────────────────
 
+type QuizQuestion = { id: string; question: string; options: string[]; correct_index: number; order_index: number; image_url?: string | null }
+
 function QuizTab({ groupId, myUserId }: { groupId: string; myUserId: string }) {
   const [quizzes, setQuizzes] = useState<Quiz[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'list' | 'create' | 'take' | 'result'>('list')
-  const [activeQuiz, setActiveQuiz] = useState<{ quiz: Quiz; questions: { id: string; question: string; options: string[]; correct_index: number; order_index: number }[]; attempts: { user_id: string; user_name: string; score: number; total: number }[]; myAttempt: { score: number; total: number } | null } | null>(null)
+  const [activeQuiz, setActiveQuiz] = useState<{ quiz: Quiz; questions: QuizQuestion[]; attempts: { user_id: string; user_name: string; score: number; total: number }[]; myAttempt: { score: number; total: number } | null } | null>(null)
   const [answers, setAnswers] = useState<number[]>([])
   const [result, setResult] = useState<{ score: number; total: number } | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -841,8 +843,35 @@ function QuizTab({ groupId, myUserId }: { groupId: string; myUserId: string }) {
   // Create form
   const [cTitle, setCTitle] = useState('')
   const [cDesc, setCDesc] = useState('')
-  const [cQuestions, setCQuestions] = useState([{ question: '', options: ['', '', '', ''], correct_index: 0 }])
+  const [cQuestions, setCQuestions] = useState([{ question: '', options: ['', '', '', ''], correct_index: 0, image_url: null as string | null }])
   const [creating, setCreating] = useState(false)
+
+  // Photo upload
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const [photoQIndex, setPhotoQIndex] = useState(-1)
+  const [uploadingPhoto, setUploadingPhoto] = useState<number | null>(null)
+
+  async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || photoQIndex < 0) return
+    const qi = photoQIndex
+    e.target.value = ''
+    setUploadingPhoto(qi)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setUploadingPhoto(null); return }
+    const ext = file.name.split('.').pop() ?? 'jpg'
+    const filePath = `quiz-images/${user.id}/${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('quiz-images').upload(filePath, file, { contentType: file.type })
+    if (error) {
+      alert('Photo upload failed. Please create a "quiz-images" public bucket in Supabase Storage first.')
+      setUploadingPhoto(null)
+      return
+    }
+    const { data: urlData } = supabase.storage.from('quiz-images').getPublicUrl(filePath)
+    setCQuestions(prev => prev.map((q, i) => i === qi ? { ...q, image_url: urlData.publicUrl } : q))
+    setUploadingPhoto(null)
+  }
 
   useEffect(() => { loadQuizzes() }, [groupId])
 
@@ -877,16 +906,17 @@ function QuizTab({ groupId, myUserId }: { groupId: string; myUserId: string }) {
     e.preventDefault()
     setCreating(true)
     const r = await fetch(`/api/groups/${groupId}/quiz`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: cTitle, description: cDesc, questions: cQuestions }) })
-    if (r.ok) { await loadQuizzes(); setView('list'); setCTitle(''); setCDesc(''); setCQuestions([{ question: '', options: ['', '', '', ''], correct_index: 0 }]) }
+    if (r.ok) { await loadQuizzes(); setView('list'); setCTitle(''); setCDesc(''); setCQuestions([{ question: '', options: ['', '', '', ''], correct_index: 0, image_url: null }]) }
     setCreating(false)
   }
 
   function addQuestion() {
-    setCQuestions(prev => [...prev, { question: '', options: ['', '', '', ''], correct_index: 0 }])
+    setCQuestions(prev => [...prev, { question: '', options: ['', '', '', ''], correct_index: 0, image_url: null }])
   }
 
   if (view === 'create') return (
     <div className="h-full overflow-y-auto p-5">
+      <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoSelect} style={{ display: 'none' }} />
       <div className="flex items-center gap-3 mb-5">
         <button onClick={() => setView('list')} className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">← Back</button>
         <h2 className="font-semibold text-gray-900 dark:text-zinc-100">Create Quiz</h2>
@@ -901,6 +931,27 @@ function QuizTab({ groupId, myUserId }: { groupId: string; myUserId: string }) {
             <p className="text-xs font-medium text-gray-500 dark:text-zinc-400">Question {qi + 1}</p>
             <input value={q.question} onChange={e => setCQuestions(prev => prev.map((pq, i) => i === qi ? { ...pq, question: e.target.value } : pq))}
               placeholder="Question text" className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            {/* Photo attachment */}
+            <div className="flex items-center gap-3">
+              {q.image_url ? (
+                <div className="relative shrink-0">
+                  <img src={q.image_url} alt="Question photo" className="w-20 h-20 object-cover rounded-lg border border-gray-200 dark:border-zinc-700" />
+                  <button type="button"
+                    onClick={() => setCQuestions(prev => prev.map((pq, i) => i === qi ? { ...pq, image_url: null } : pq))}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button type="button"
+                  onClick={() => { setPhotoQIndex(qi); photoInputRef.current?.click() }}
+                  disabled={uploadingPhoto === qi}
+                  className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 border border-dashed border-gray-300 dark:border-zinc-600 hover:border-indigo-400 dark:hover:border-indigo-500 rounded-lg px-3 py-2 transition-colors">
+                  {uploadingPhoto === qi ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                  {uploadingPhoto === qi ? 'Uploading…' : 'Add photo'}
+                </button>
+              )}
+            </div>
             {q.options.map((opt, oi) => (
               <div key={oi} className="flex items-center gap-2">
                 <input type="radio" name={`correct_${qi}`} checked={q.correct_index === oi} onChange={() => setCQuestions(prev => prev.map((pq, i) => i === qi ? { ...pq, correct_index: oi } : pq))} className="accent-green-600" />
@@ -930,6 +981,9 @@ function QuizTab({ groupId, myUserId }: { groupId: string; myUserId: string }) {
       <div className="space-y-5 max-w-lg">
         {activeQuiz.questions.map((q, qi) => (
           <div key={q.id} className="p-4 rounded-xl border border-gray-200 dark:border-zinc-800">
+            {q.image_url && (
+              <img src={q.image_url} alt="Question" className="w-full max-h-56 object-contain rounded-lg mb-3 bg-gray-50 dark:bg-zinc-800" />
+            )}
             <p className="text-sm font-medium text-gray-900 dark:text-zinc-100 mb-3">{qi + 1}. {q.question}</p>
             <div className="space-y-2">
               {(q.options as string[]).map((opt, oi) => (

@@ -36,12 +36,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   if (qError || !quiz) return NextResponse.json({ error: qError?.message }, { status: 500 })
 
-  const rows = questions.map((q: { question: string; options: string[]; correct_index: number }, i: number) => ({
+  const rows = questions.map((q: { question: string; options: string[]; correct_index: number; image_url?: string | null }, i: number) => ({
     quiz_id: quiz.id,
     question: q.question,
     options: q.options,
     correct_index: q.correct_index,
     order_index: i,
+    image_url: q.image_url || null,
   }))
 
   await supabase.from('quiz_questions').insert(rows)

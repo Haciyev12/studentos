@@ -11,7 +11,7 @@ import {
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { DEADLINE_TYPE_LABELS, DEADLINE_TYPE_STYLES, GRADE_POINTS, scoreToGrade, type Course, type Deadline, type DeadlineType, type Syllabus } from '@/types'
+import { DEADLINE_TYPE_LABELS, DEADLINE_TYPE_STYLES, scoreToGrade, type Course, type Deadline, type DeadlineType, type Syllabus } from '@/types'
 import { cn, formatRelativeDate } from '@/lib/utils'
 
 const DEADLINE_TYPES: DeadlineType[] = ['assignment', 'quiz', 'exam', 'project', 'other']
@@ -640,11 +640,6 @@ const TARGET_MINIMUMS: Record<string, number> = {
   A: 94, 'A-': 90, 'B+': 87, B: 83, 'B-': 80,
   'C+': 77, C: 73, 'C-': 70, 'D+': 67, D: 60,
 }
-const SCENARIO_KEYS = ['pessimistic', 'realistic', 'optimistic'] as const
-type Scenario = typeof SCENARIO_KEYS[number]
-const SCENARIO_LABELS: Record<Scenario, string> = { pessimistic: 'Pessimistic', realistic: 'Realistic', optimistic: 'Optimistic' }
-const SCENARIO_ASSUMED: Record<Scenario, number> = { pessimistic: 60, realistic: 75, optimistic: 90 }
-
 function gradeColor(letter: string): string {
   if (letter.startsWith('A')) return 'text-emerald-500 dark:text-emerald-400'
   if (letter.startsWith('B')) return 'text-blue-500 dark:text-blue-400'
@@ -656,7 +651,6 @@ function gradeColor(letter: string): string {
 function GradePredictor({ deadlines, course, onRefresh }: { deadlines: Deadline[]; course: Course; onRefresh: () => void }) {
   const [scores, setScores] = useState<Record<string, string>>({})
   const [targetGrade, setTargetGrade] = useState('B+')
-  const [activeScenario, setActiveScenario] = useState<Scenario>('realistic')
   const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   useEffect(() => {
@@ -678,11 +672,6 @@ function GradePredictor({ deadlines, course, onRefresh }: { deadlines: Deadline[
   const remainingWeight = totalWeight - scoredWeight
   const currentScore = scoredWeight > 0 ? scoredWeightedSum / scoredWeight : null
   const currentLetter = currentScore != null ? scoreToGrade(currentScore) : null
-
-  function projectedFinal(assumed: number) {
-    if (totalWeight === 0) return 0
-    return (scoredWeightedSum + assumed * remainingWeight) / totalWeight
-  }
 
   function neededScore() {
     if (remainingWeight === 0) return null
@@ -881,36 +870,6 @@ function GradePredictor({ deadlines, course, onRefresh }: { deadlines: Deadline[
             </div>
           </div>
 
-          {/* Scenario Comparison */}
-          {remainingWeight > 0 && (
-            <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Scenario Comparison</h3>
-                <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">Projected final grade based on remaining {remainingWeight}% of assessments</p>
-              </div>
-              <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-zinc-800">
-                {SCENARIO_KEYS.map(key => {
-                  const projected = projectedFinal(SCENARIO_ASSUMED[key])
-                  const letter = scoreToGrade(projected)
-                  const gpa = GRADE_POINTS[letter] ?? 0
-                  return (
-                    <motion.button key={key} onClick={() => setActiveScenario(key)}
-                      className={cn('relative px-5 py-5 text-center transition-colors', activeScenario === key ? 'bg-indigo-50/60 dark:bg-indigo-500/5' : 'hover:bg-gray-50 dark:hover:bg-zinc-800/40')}
-                    >
-                      {activeScenario === key && (
-                        <motion.div layoutId="scenario-underline" className="absolute inset-x-0 bottom-0 h-0.5 bg-indigo-500" />
-                      )}
-                      <p className="text-xs font-semibold text-gray-400 dark:text-zinc-500 mb-0.5">{SCENARIO_LABELS[key]}</p>
-                      <p className="text-xs text-gray-300 dark:text-zinc-700 mb-2">avg {SCENARIO_ASSUMED[key]}% remaining</p>
-                      <p className={cn('text-3xl font-bold mb-0.5', gradeColor(letter))}>{letter}</p>
-                      <p className="text-base font-semibold text-gray-600 dark:text-zinc-300">{projected.toFixed(1)}%</p>
-                      <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">{gpa.toFixed(2)} GPA pts · {course.credits} cr</p>
-                    </motion.button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
